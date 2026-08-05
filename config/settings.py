@@ -17,11 +17,30 @@ import environ
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-CHURN_MODEL_PATH = BASE_DIR / "models" / "model.pkl"
-CHURN_MODEL_METADATA_PATH = BASE_DIR / "models" / "model_metadata.json"
-
-env = environ.Env(DJANGO_DEBUG=(bool, True))
+env = environ.Env(
+    DJANGO_DEBUG=(bool, True),
+    PORT=(int, 8000),
+)
 environ.Env.read_env(BASE_DIR / ".env")
+
+
+def _environment_path(name: str, default: Path) -> Path:
+    """Resolve an environment-provided path relative to the project root."""
+    configured_path = Path(env(name, default=str(default)))
+    if configured_path.is_absolute():
+        return configured_path
+    return BASE_DIR / configured_path
+
+
+CHURN_MODEL_PATH = _environment_path(
+    "MODEL_PATH",
+    BASE_DIR / "models" / "model.pkl",
+)
+CHURN_MODEL_METADATA_PATH = _environment_path(
+    "MODEL_METADATA_PATH",
+    BASE_DIR / "models" / "model_metadata.json",
+)
+PORT = env.int("PORT", default=8000)
 
 
 # Quick-start development settings - unsuitable for production
