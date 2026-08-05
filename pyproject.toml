@@ -22,3 +22,9 @@ dev = [
     "pytest-django>=4.12.0",
     "ruff>=0.16.1",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = ["--strict-markers"]
