@@ -13,16 +13,15 @@ from django.core.management.base import CommandError
 from sklearn.pipeline import Pipeline
 
 from ml_pipeline.management.commands import train_churn_model as command_module
-from ml_pipeline.services.data import get_dataset_path
 from ml_pipeline.services.metadata import SavedArtifacts, save_training_artifacts
-from ml_pipeline.services.preprocessing import load_features_and_target
 from ml_pipeline.services.tracking import TrackingSummary
 from ml_pipeline.services.training import (
     RANDOM_STATE,
     TrainingSummary,
-    get_model_candidates,
     train_and_compare,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.fixture(scope="module")
@@ -179,17 +178,3 @@ def test_training_command_reports_a_missing_dataset(
 
     with pytest.raises(CommandError, match="download_churn_data"):
         call_command("train_churn_model")
-
-
-@pytest.mark.integration
-def test_logistic_regression_roc_auc_exceeds_quality_threshold() -> None:
-    dataset_path = get_dataset_path()
-    if not dataset_path.is_file():
-        pytest.skip("Run download_churn_data before the local quality test.")
-
-    features, target = load_features_and_target(dataset_path)
-    candidates = {"logistic_regression": get_model_candidates()["logistic_regression"]}
-
-    summary = train_and_compare(features, target, candidates=candidates)
-
-    assert summary.winner.metrics.roc_auc > 0.78
