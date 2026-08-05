@@ -38,15 +38,18 @@ COPY --chown=appuser:appuser ml_pipeline ./ml_pipeline
 COPY --chown=appuser:appuser predictions ./predictions
 COPY --chown=appuser:appuser models/model.pkl models/model_metadata.json ./models/
 
-USER appuser
+RUN export DJANGO_SECRET_KEY=build-only-insecure-validation-key-do-not-use \
+    DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1; \
+    python manage.py collectstatic --noinput \
+    && python manage.py check \
+    && python manage.py shell -c \
+        "from predictions.services.model_loader import get_model_bundle; get_model_bundle()"
 
-RUN DJANGO_SECRET_KEY=container-build-check \
-    DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 \
-    python manage.py check
+USER appuser
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/api/health/\", timeout=4)"]
+    CMD ["python", "-c", "import os, urllib.request; request = urllib.request.Request(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/api/health/\", headers={\"X-Forwarded-Proto\": \"https\"}); urllib.request.urlopen(request, timeout=4)"]
 
-CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 --timeout 60 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 --timeout 120 --access-logfile - --error-logfile -"]
