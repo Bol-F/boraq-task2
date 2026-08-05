@@ -21,12 +21,16 @@ db.sqlite3
 
 # Downloaded datasets
 data/*.csv
+data/*.tmp
 
 # MLflow local data and model artifacts
 mlflow.db*
 mlruns/
 mlartifacts/
 artifacts/
+models/model.pkl
+models/model_metadata.json
+models/*.tmp
 
 # Logs and temporary operating-system files
 *.log

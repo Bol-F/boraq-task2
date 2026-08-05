@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand, CommandError
 
 from ml_pipeline.services.data import get_dataset_path
+from ml_pipeline.services.metadata import save_training_artifacts
 from ml_pipeline.services.preprocessing import load_features_and_target
 from ml_pipeline.services.tracking import EXPERIMENT_NAME, track_training_results
 from ml_pipeline.services.training import TrainingSummary, train_and_compare
@@ -53,6 +54,12 @@ class Command(BaseCommand):
             features, target = load_features_and_target(dataset_path)
             summary = train_and_compare(features, target)
             tracking = track_training_results(summary)
+            artifacts = save_training_artifacts(
+                summary,
+                tracking,
+                dataset_rows=len(features),
+                feature_count=features.shape[1],
+            )
         except Exception as error:
             raise CommandError(f"Model training failed: {error}") from error
 
@@ -69,3 +76,5 @@ class Command(BaseCommand):
         )
         for model_name, run_id in tracking.run_ids.items():
             self.stdout.write(f"  {model_name}: {run_id}")
+        self.stdout.write(f"Saved model: {artifacts.model_path}")
+        self.stdout.write(f"Saved metadata: {artifacts.metadata_path}")
