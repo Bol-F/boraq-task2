@@ -24,7 +24,7 @@ data/*.csv
 data/*.tmp
 
 # MLflow local data and temporary training artifacts
-mlflow.db*
+mlflow*.db*
 mlruns/
 mlartifacts/
 artifacts/

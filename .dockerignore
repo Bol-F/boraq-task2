@@ -13,7 +13,7 @@
 coverage.xml
 htmlcov
 mlruns
-mlflow.db*
+mlflow*.db*
 mlartifacts
 artifacts
 data/*.csv

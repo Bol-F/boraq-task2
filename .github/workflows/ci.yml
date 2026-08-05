@@ -34,24 +34,25 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           version: "0.11.32"
           enable-cache: true
           cache-dependency-glob: uv.lock
+          prune-cache: true
 
       - name: Synchronize locked dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Run Ruff lint checks
         run: uv run ruff check .
@@ -87,13 +88,12 @@ jobs:
       - name: Run full test suite with coverage
         run: uv run pytest --cov=. --cov-report=term-missing --cov-report=xml
 
-      - name: Train model artifacts for the container build
-        run: uv run python manage.py train_churn_model
-
-      - name: Verify generated model artifacts
+      - name: Verify committed model artifacts
         run: |
           test -s models/model.pkl
           test -s models/model_metadata.json
+          uv run python manage.py shell -c \
+            "from predictions.services.model_loader import get_model_bundle; get_model_bundle()"
 
       - name: Build Django API image
         run: docker build -t churn-api .
