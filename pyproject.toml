@@ -20,6 +20,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "pytest-django>=4.12.0",
     "ruff>=0.16.1",
 ]
@@ -33,6 +34,26 @@ markers = [
     "unit: fast isolated tests using local fixtures and mocks",
     "integration: tests multiple application layers using local resources",
     "model_quality: evaluates the production pipeline on the real churn dataset",
+]
+
+[tool.coverage.run]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "config/asgi.py",
+    "config/wsgi.py",
+    "dashboard/app.py",
+    "manage.py",
+    "tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+skip_empty = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
 ]
 
 [tool.ruff]
