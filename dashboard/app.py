@@ -7,21 +7,38 @@ from pathlib import Path
 import environ
 import streamlit as st
 
-from dashboard.api_client import (
-    ApiResult,
-    HealthData,
-    PredictionData,
-    get_api_base_url,
-    get_health_status,
-)
-from dashboard.api_client import predict_customer as request_prediction
-from dashboard.components import (
-    DashboardValidationError,
-    render_api_error,
-    render_customer_form,
-    render_health_status,
-    render_prediction_result,
-)
+if __package__:
+    from dashboard.api_client import (
+        ApiResult,
+        HealthData,
+        PredictionData,
+        get_api_base_url,
+        get_health_status,
+    )
+    from dashboard.api_client import predict_customer as request_prediction
+    from dashboard.components import (
+        DashboardValidationError,
+        render_api_error,
+        render_customer_form,
+        render_health_status,
+        render_prediction_result,
+    )
+else:
+    from api_client import (
+        ApiResult,
+        HealthData,
+        PredictionData,
+        get_api_base_url,
+        get_health_status,
+    )
+    from api_client import predict_customer as request_prediction
+    from components import (
+        DashboardValidationError,
+        render_api_error,
+        render_customer_form,
+        render_health_status,
+        render_prediction_result,
+    )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PREDICTION_RESULT_KEY = "latest_prediction_result"

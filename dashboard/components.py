@@ -9,18 +9,32 @@ from typing import Literal
 
 import streamlit as st
 
-from dashboard.api_client import ApiError, ApiResult, HealthData, PredictionData
-from dashboard.constants import (
-    CONTRACT_CHOICES,
-    GENDER_CHOICES,
-    INTERNET_ADDON_CHOICES,
-    INTERNET_SERVICE_CHOICES,
-    MODEL_FEATURE_NAMES,
-    MULTIPLE_LINES_CHOICES,
-    PAYMENT_METHOD_CHOICES,
-    RISK_INTERPRETATIONS,
-    YES_NO_CHOICES,
-)
+if __package__:
+    from dashboard.api_client import ApiError, ApiResult, HealthData, PredictionData
+    from dashboard.constants import (
+        CONTRACT_CHOICES,
+        GENDER_CHOICES,
+        INTERNET_ADDON_CHOICES,
+        INTERNET_SERVICE_CHOICES,
+        MODEL_FEATURE_NAMES,
+        MULTIPLE_LINES_CHOICES,
+        PAYMENT_METHOD_CHOICES,
+        RISK_INTERPRETATIONS,
+        YES_NO_CHOICES,
+    )
+else:
+    from api_client import ApiError, ApiResult, HealthData, PredictionData
+    from constants import (
+        CONTRACT_CHOICES,
+        GENDER_CHOICES,
+        INTERNET_ADDON_CHOICES,
+        INTERNET_SERVICE_CHOICES,
+        MODEL_FEATURE_NAMES,
+        MULTIPLE_LINES_CHOICES,
+        PAYMENT_METHOD_CHOICES,
+        RISK_INTERPRETATIONS,
+        YES_NO_CHOICES,
+    )
 
 CustomerPayload = dict[str, str | int | float]
 
