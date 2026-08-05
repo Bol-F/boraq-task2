@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 import streamlit as st
 
+from dashboard.api_client import ApiError, PredictionData
 from dashboard.constants import (
     CONTRACT_CHOICES,
     GENDER_CHOICES,
@@ -15,6 +18,7 @@ from dashboard.constants import (
     MODEL_FEATURE_NAMES,
     MULTIPLE_LINES_CHOICES,
     PAYMENT_METHOD_CHOICES,
+    RISK_INTERPRETATIONS,
     YES_NO_CHOICES,
 )
 
@@ -23,6 +27,15 @@ CustomerPayload = dict[str, str | int | float]
 
 class DashboardValidationError(ValueError):
     """Raised when the dashboard cannot build a complete customer payload."""
+
+
+@dataclass(frozen=True)
+class RiskPresentation:
+    """Text and Streamlit status style for one risk level."""
+
+    label: str
+    interpretation: str
+    status: Literal["success", "warning", "error"]
 
 
 def build_customer_payload(values: Mapping[str, object]) -> CustomerPayload:
@@ -36,8 +49,12 @@ def build_customer_payload(values: Mapping[str, object]) -> CustomerPayload:
         value = values[field_name]
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise DashboardValidationError(f"{field_name} must be a number.")
-        if not math.isfinite(value) or value < 0:
+        if not math.isfinite(value):
+            raise DashboardValidationError(f"{field_name} must be a finite number.")
+        if value < 0:
             raise DashboardValidationError(f"{field_name} cannot be negative.")
+        if field_name == "tenure" and value > 72:
+            raise DashboardValidationError("tenure cannot exceed 72 months.")
 
     empty_fields = [
         field_name
@@ -55,6 +72,74 @@ def build_customer_payload(values: Mapping[str, object]) -> CustomerPayload:
             raise DashboardValidationError(f"{field_name} has an invalid value.")
         payload[field_name] = value
     return payload
+
+
+def format_probability(probability: float) -> str:
+    """Format a zero-to-one probability as a one-decimal percentage."""
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError("Probability must be between 0 and 1.")
+    return f"{probability:.1%}"
+
+
+def get_risk_presentation(risk: str) -> RiskPresentation:
+    """Return visible text and a status style for a supported risk value."""
+    presentations = {
+        "low": RiskPresentation(
+            label="LOW",
+            interpretation=RISK_INTERPRETATIONS["low"],
+            status="success",
+        ),
+        "medium": RiskPresentation(
+            label="MEDIUM",
+            interpretation=RISK_INTERPRETATIONS["medium"],
+            status="warning",
+        ),
+        "high": RiskPresentation(
+            label="HIGH",
+            interpretation=RISK_INTERPRETATIONS["high"],
+            status="error",
+        ),
+    }
+    try:
+        return presentations[risk.lower()]
+    except KeyError as error:
+        raise ValueError(f"Unsupported risk level: {risk}") from error
+
+
+def render_api_error(error: ApiError) -> None:
+    """Display a safe API error and optional Django field validation details."""
+    st.error(error.message)
+    if not error.field_errors:
+        return
+
+    for field_name, messages in error.field_errors.items():
+        if isinstance(messages, list):
+            message_text = "; ".join(str(message) for message in messages)
+        else:
+            message_text = str(messages)
+        st.markdown(f"- **{field_name}:** {message_text}")
+
+
+def render_prediction_result(prediction: PredictionData) -> None:
+    """Present a successful churn prediction without implying certainty."""
+    st.divider()
+    st.subheader("Prediction result")
+
+    probability_column, churn_column, version_column = st.columns(3)
+    probability_column.metric(
+        "Churn probability",
+        format_probability(prediction.churn_probability),
+    )
+    churn_column.metric(
+        "Will churn (0.5 threshold)",
+        "Yes" if prediction.will_churn else "No",
+    )
+    version_column.metric("Model version", prediction.model_version)
+
+    risk = get_risk_presentation(prediction.risk)
+    risk_message = f"{risk.label} RISK — {risk.interpretation}"
+    getattr(st, risk.status)(risk_message)
+    st.caption("This result is an estimate and should not be treated as certain.")
 
 
 def render_customer_form() -> CustomerPayload | None:
