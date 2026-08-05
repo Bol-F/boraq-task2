@@ -1,0 +1,99 @@
+---
+name: Continuous integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DJANGO_SECRET_KEY: ci-only-not-a-production-secret
+  DJANGO_DEBUG: "false"
+  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+  MODEL_PATH: models/model.pkl
+  MODEL_METADATA_PATH: models/model_metadata.json
+  PORT: "8000"
+  MLFLOW_TRACKING_URI: sqlite:///mlflow-ci.db
+
+jobs:
+  test-and-build:
+    name: Test, quality gate, and image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize locked dependencies
+        run: uv sync --frozen
+
+      - name: Run Ruff lint checks
+        run: uv run ruff check .
+
+      - name: Verify Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Download checksum-verified churn dataset
+        run: uv run python manage.py download_churn_data --overwrite
+
+      - name: Verify downloaded dataset
+        run: |
+          uv run python - <<'PY'
+          from pathlib import Path
+
+          from ml_pipeline.services.data import load_churn_data
+
+          dataset = load_churn_data(Path("data/telco_churn.csv"))
+          if len(dataset) != 7043:
+              raise SystemExit(f"Expected 7043 dataset rows, found {len(dataset)}.")
+          print(f"Validated churn dataset: {len(dataset)} rows, {len(dataset.columns)} columns")
+          PY
+
+      - name: Run Django system checks
+        run: uv run python manage.py check
+
+      - name: Apply database migrations
+        run: uv run python manage.py migrate --noinput
+
+      - name: Run model-quality gate
+        run: uv run pytest -m model_quality -v
+
+      - name: Run full test suite with coverage
+        run: uv run pytest --cov=. --cov-report=term-missing --cov-report=xml
+
+      - name: Train model artifacts for the container build
+        run: uv run python manage.py train_churn_model
+
+      - name: Verify generated model artifacts
+        run: |
+          test -s models/model.pkl
+          test -s models/model_metadata.json
+
+      - name: Build Django API image
+        run: docker build -t churn-api .
