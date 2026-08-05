@@ -19,6 +19,9 @@ htmlcov/
 # Django local data
 db.sqlite3
 
+# Downloaded datasets
+data/*.csv
+
 # MLflow local data and model artifacts
 mlruns/
 mlartifacts/
