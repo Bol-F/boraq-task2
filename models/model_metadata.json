@@ -1,0 +1,15 @@
+{
+  "model_name": "logistic_regression",
+  "model_version": "1.0.0",
+  "roc_auc": 0.8416518122400475,
+  "pr_auc": 0.6327060026486367,
+  "f1": 0.6136125654450262,
+  "training_date": "2026-08-05T17:33:29.721133+00:00",
+  "dataset_rows": 7043,
+  "feature_count": 19,
+  "random_state": 42,
+  "selection_metric": "roc_auc",
+  "mlflow_experiment": "telecom-churn",
+  "mlflow_experiment_id": "1",
+  "mlflow_run_id": "33309efc8577438f82b244ab812e922b"
+}
