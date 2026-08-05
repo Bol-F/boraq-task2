@@ -5,7 +5,8 @@ Telecom Customer Churn MLOps project. It includes a Django REST Framework API,
 a safe IBM dataset downloader, reproducible scikit-learn training, local MLflow
 experiment tracking, model selection, artifact persistence, a documented churn
 prediction endpoint, a Streamlit dashboard, and automated tests. Docker images
-and CI/CD workflows belong to later project phases.
+are provided for the Django prediction API. CI/CD workflows belong to a later
+project phase.
 
 ## Technology stack
 
@@ -18,9 +19,10 @@ and CI/CD workflows belong to later project phases.
 - requests for HTTP clients
 - Psycopg for future PostgreSQL connectivity
 - Gunicorn for production serving on supported platforms
-- pytest and pytest-django for tests
+- pytest, pytest-django, and pytest-cov for tests and coverage
 - Ruff for linting and formatting
-- Docker and GitHub Actions for future container and CI/CD work
+- Docker for the production-oriented API image and local Compose workflow
+- GitHub Actions for future CI/CD work
 
 ## Installation with uv
 
@@ -78,9 +80,10 @@ existing dataset. To intentionally download it again, use:
 uv run python manage.py download_churn_data --overwrite
 ```
 
-Downloaded data is local and ignored by Git. Tests mock HTTP requests and do
-not require network access. The explicitly marked model-quality test uses the
-local CSV when it is available.
+Downloaded data is local and ignored by Git. Fast tests use a tracked fixture
+and mock HTTP requests, so they do not require network access. The full test
+suite deliberately fails with a setup instruction if this real CSV is absent,
+because the model-quality test is a required gate rather than an optional skip.
 
 ## Train churn models
 
@@ -330,13 +333,58 @@ traceback.
 
 ## Run tests
 
+Tests are separated by responsibility:
+
+```text
+tests/
+├── fixtures/sample_churn.csv
+├── conftest.py
+├── test_data_pipeline.py
+├── test_training.py
+├── test_model_quality.py
+├── test_prediction_api.py
+├── test_health.py
+├── test_model_loader.py
+├── test_dashboard_api_client.py
+├── test_dashboard_components.py
+├── test_data_download.py
+└── test_openapi.py
+```
+
+The deterministic sample CSV has the complete production schema, both churn
+classes, blank and invalid `TotalCharges` values, all contract types, and the
+phone/internet special values used by the real dataset. Temporary artifact
+fixtures keep tests from overwriting `models/`.
+
+Run the fast, network-independent suite without the real-data quality gate:
+
 ```bash
+uv run pytest -m "not model_quality"
+```
+
+Download the real dataset and run every test, including the quality gate:
+
+```bash
+uv run python manage.py download_churn_data
 uv run pytest -v
 ```
 
-For the full model-quality assertion, download the dataset before running the
-tests. Without the local CSV, that explicitly marked integration test is
-skipped while the network-independent unit tests still run.
+The `model_quality` test uses the shared preprocessing pipeline, a stratified
+80/20 split, the configured Logistic Regression baseline, and
+`random_state=42`. It requires ROC-AUC to be strictly greater than `0.78`; a
+regression reports the measured score in the failure message. The normal
+`uv run pytest` command includes this gate.
+
+Run tests with missing-line coverage and the configured 75% starting floor:
+
+```bash
+uv run pytest --cov=. --cov-report=term-missing
+```
+
+Coverage omits migrations, generated server entry points, test code, and the
+Streamlit page-composition entry point. Business logic in the data pipeline,
+training services, prediction API, model loader, and dashboard client remains
+included.
 
 ## Run Ruff
 
@@ -388,3 +436,82 @@ HTTP 503 is used consistently for the degraded response because this endpoint
 acts as a readiness check: the web process is reachable, but it is not ready to
 serve predictions. The endpoint accepts `GET` requests. Other methods,
 including `POST`, return HTTP 405 Method Not Allowed.
+
+## Run the Django API with Docker
+
+The multi-stage image uses Python 3.11 slim and pinned `uv`, installs locked
+production dependencies with `uv sync --frozen --no-dev`, copies only the
+Django API code and required model artifacts, runs a Django check during the
+build, and serves through Gunicorn as an unprivileged user. Its health check
+uses Python's standard library, so no extra curl package is needed. The
+Swagger UI uses its configured CDN assets and does not require collected local
+static files.
+
+The generated model and metadata are intentionally ignored by Git but are
+required in the Docker build context. Create them before building if needed:
+
+```bash
+uv run python manage.py download_churn_data
+uv run python manage.py train_churn_model
+```
+
+Build the image:
+
+```bash
+docker build -t churn-api .
+```
+
+Run it directly on port 8000:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e DJANGO_SECRET_KEY=local-development-secret \
+  -e DJANGO_DEBUG=false \
+  -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 \
+  -e MODEL_PATH=/app/models/model.pkl \
+  -e MODEL_METADATA_PATH=/app/models/model_metadata.json \
+  -e PORT=8000 \
+  churn-api
+```
+
+Or build and start the same API through Compose, with no host volumes that can
+overwrite the bundled artifacts:
+
+```bash
+docker compose up --build
+```
+
+The API container reads these settings:
+
+| Variable | Purpose | Local/container default |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | Django signing secret | Unsafe local fallback; always set for production |
+| `DJANGO_DEBUG` | Enables Django debug mode | `True` locally, `false` in the image |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated accepted hosts | `localhost,127.0.0.1` |
+| `MODEL_PATH` | Saved scikit-learn pipeline | `models/model.pkl` |
+| `MODEL_METADATA_PATH` | Model metadata JSON | `models/model_metadata.json` |
+| `PORT` | Internal Gunicorn listening port | `8000` |
+
+Once the container is ready, verify its three public surfaces:
+
+```bash
+curl http://127.0.0.1:8000/api/health/
+curl http://127.0.0.1:8000/api/docs/
+```
+
+Use the complete prediction curl request in the Prediction endpoint section to
+verify `POST /api/predict/` against the container.
+
+Common Docker troubleshooting:
+
+- If the build reports missing `models/model.pkl` or metadata, run the download
+  and training commands above before rebuilding.
+- If `/api/health/` returns HTTP 503, confirm both model paths are correct and
+  that the two artifacts were produced by the current project dependencies.
+- If Django reports an invalid host, add the hostname used by the request to
+  the comma-separated `DJANGO_ALLOWED_HOSTS` value. Keep `127.0.0.1` for the
+  built-in container health check.
+- If port 8000 is already in use, publish a different host port, for example
+  `-p 8080:8000`, and call the API on port 8080.
+- If Docker cannot connect to its engine, start Docker Desktop or the local
+  Docker daemon before running build or Compose commands.
