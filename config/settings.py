@@ -32,6 +32,16 @@ def _environment_path(name: str, default: Path) -> Path:
     return BASE_DIR / configured_path
 
 
+def _environment_list(name: str, default: list[str]) -> list[str]:
+    """Read a clean, de-duplicated comma-separated environment variable."""
+    configured_values = env(name, default=",".join(default))
+    return list(
+        dict.fromkeys(
+            value.strip() for value in configured_values.split(",") if value.strip()
+        )
+    )
+
+
 CHURN_MODEL_PATH = _environment_path(
     "MODEL_PATH",
     BASE_DIR / "models" / "model.pkl",
@@ -46,16 +56,35 @@ PORT = env.int("PORT", default=8000)
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# This fallback is for local development only. Set a strong value in production.
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="unsafe-development-key")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DJANGO_DEBUG")
 
-ALLOWED_HOSTS = env.list(
+_DEVELOPMENT_SECRET_KEY = "unsafe-development-key"
+# This fallback is for local development only. Set a strong value in production.
+SECRET_KEY = env("DJANGO_SECRET_KEY", default=_DEVELOPMENT_SECRET_KEY)
+if not DEBUG and SECRET_KEY == _DEVELOPMENT_SECRET_KEY:
+    raise environ.ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is false."
+    )
+
+RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME", default="").strip()
+_configured_hosts = _environment_list(
     "DJANGO_ALLOWED_HOSTS",
-    default=["localhost", "127.0.0.1"],
+    ["localhost", "127.0.0.1"],
 )
+if RENDER_EXTERNAL_HOSTNAME:
+    _configured_hosts.append(RENDER_EXTERNAL_HOSTNAME)
+ALLOWED_HOSTS = list(dict.fromkeys(_configured_hosts))
+
+# Render terminates TLS before proxying requests to Gunicorn. These settings make
+# Django trust that signal while keeping direct local HTTP containers usable.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG and bool(RENDER_EXTERNAL_HOSTNAME)
+SECURE_HSTS_SECONDS = 31_536_000 if SECURE_SSL_REDIRECT else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL_REDIRECT
+SECURE_HSTS_PRELOAD = SECURE_SSL_REDIRECT
 
 
 # Application definition
@@ -75,6 +104,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -148,7 +178,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
