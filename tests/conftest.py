@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from numpy.random import default_rng
 
 
 @pytest.fixture
@@ -47,3 +48,27 @@ def churn_dataframe() -> pd.DataFrame:
             "Churn": ["No", "Yes", "No", "Yes"],
         }
     )
+
+
+@pytest.fixture(scope="module")
+def training_dataset() -> tuple[pd.DataFrame, pd.Series]:
+    """Return a reproducible imbalanced dataset for fast model unit tests."""
+    random = default_rng(42)
+    target_values = [0] * 60 + [1] * 20
+    random.shuffle(target_values)
+    target = pd.Series(target_values, name="Churn", dtype="int8")
+    tenure = random.integers(1, 73, size=len(target))
+    monthly_charges = random.normal(
+        loc=target.map({0: 55.0, 1: 85.0}),
+        scale=8.0,
+    )
+    features = pd.DataFrame(
+        {
+            "gender": random.choice(["Female", "Male"], size=len(target)),
+            "tenure": tenure,
+            "Contract": target.map({0: "Two year", 1: "Month-to-month"}),
+            "MonthlyCharges": monthly_charges,
+            "TotalCharges": tenure * monthly_charges,
+        }
+    )
+    return features, target
