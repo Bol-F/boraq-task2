@@ -3,14 +3,15 @@
 This repository provides the foundation and model-training workflow for a
 Telecom Customer Churn MLOps project. It includes a Django REST Framework API,
 a safe IBM dataset downloader, reproducible scikit-learn training, local MLflow
-experiment tracking, model selection, artifact persistence, and automated tests.
-REST prediction, the Streamlit dashboard, Docker images, and CI/CD workflows
-belong to later project phases.
+experiment tracking, model selection, artifact persistence, a documented churn
+prediction endpoint, and automated tests. The Streamlit dashboard, Docker
+images, and CI/CD workflows belong to later project phases.
 
 ## Technology stack
 
 - Python 3.11 and uv for the runtime and dependency management
 - Django and Django REST Framework for the API
+- drf-spectacular for OpenAPI schema generation and Swagger UI
 - pandas, scikit-learn, and joblib for preprocessing, training, and persistence
 - MLflow for local experiment tracking and model artifacts
 - Streamlit for the future dashboard
@@ -167,6 +168,114 @@ uv run python manage.py runserver
 
 The API is then available at `http://127.0.0.1:8000/api/`.
 
+The saved model and metadata must exist at `models/model.pkl` and
+`models/model_metadata.json` for predictions. Train the model first if those
+local artifacts are not present.
+
+## Prediction endpoint
+
+Send one customer's 19 raw features to `POST /api/predict/`. The API validates
+the request, then passes it directly to the cached, complete scikit-learn
+pipeline. It does not recreate the training preprocessing.
+
+Example request body:
+
+```json
+{
+  "gender": "Female",
+  "SeniorCitizen": 0,
+  "Partner": "Yes",
+  "Dependents": "No",
+  "tenure": 5,
+  "PhoneService": "Yes",
+  "MultipleLines": "No",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "No",
+  "OnlineBackup": "No",
+  "DeviceProtection": "No",
+  "TechSupport": "No",
+  "StreamingTV": "Yes",
+  "StreamingMovies": "Yes",
+  "Contract": "Month-to-month",
+  "PaperlessBilling": "Yes",
+  "PaymentMethod": "Electronic check",
+  "MonthlyCharges": 89.9,
+  "TotalCharges": 450.5
+}
+```
+
+With the current locally trained artifact, an example HTTP 200 response is:
+
+```json
+{
+  "churn_probability": 0.899,
+  "will_churn": true,
+  "risk": "high",
+  "model_version": "1.0.0"
+}
+```
+
+Probabilities are rounded to four decimal places. `will_churn` uses a `0.5`
+threshold. Risk is `low` below `0.35`, `medium` from `0.35` to below `0.65`,
+and `high` from `0.65` upward.
+
+Validation problems return HTTP 400 with standard field-based Django REST
+Framework errors. For example:
+
+```json
+{
+  "tenure": [
+    "Ensure this value is greater than or equal to 0."
+  ]
+}
+```
+
+If the model or metadata cannot be loaded, prediction returns HTTP 503 without
+exposing internal exception details or local paths:
+
+```json
+{
+  "detail": "Prediction model is not available."
+}
+```
+
+Call the endpoint with curl from macOS or Linux:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/predict/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gender": "Female",
+    "SeniorCitizen": 0,
+    "Partner": "Yes",
+    "Dependents": "No",
+    "tenure": 5,
+    "PhoneService": "Yes",
+    "MultipleLines": "No",
+    "InternetService": "Fiber optic",
+    "OnlineSecurity": "No",
+    "OnlineBackup": "No",
+    "DeviceProtection": "No",
+    "TechSupport": "No",
+    "StreamingTV": "Yes",
+    "StreamingMovies": "Yes",
+    "Contract": "Month-to-month",
+    "PaperlessBilling": "Yes",
+    "PaymentMethod": "Electronic check",
+    "MonthlyCharges": 89.9,
+    "TotalCharges": 450.5
+  }'
+```
+
+PowerShell users can use `curl.exe` with equivalent quoting or
+`Invoke-RestMethod`.
+
+## API documentation
+
+With Django running, interactive Swagger documentation is available at
+`http://127.0.0.1:8000/api/docs/`. The generated OpenAPI schema is available at
+`http://127.0.0.1:8000/api/schema/`.
+
 ## Run tests
 
 ```bash
@@ -200,14 +309,30 @@ With the development server running, request the health endpoint:
 curl http://127.0.0.1:8000/api/health/
 ```
 
-PowerShell users can run `curl.exe` explicitly. A successful response is:
+PowerShell users can run `curl.exe` explicitly. A ready HTTP 200 response is:
 
 ```json
 {
   "status": "ok",
-  "service": "churn-prediction-api"
+  "service": "churn-prediction-api",
+  "model_loaded": true,
+  "model_version": "1.0.0"
 }
 ```
 
-The endpoint accepts `GET` requests. Other methods, including `POST`, return
-HTTP 405 Method Not Allowed.
+If the model or metadata is unavailable, the endpoint remains responsive and
+returns HTTP 503 with readiness information:
+
+```json
+{
+  "status": "degraded",
+  "service": "churn-prediction-api",
+  "model_loaded": false,
+  "model_version": null
+}
+```
+
+HTTP 503 is used consistently for the degraded response because this endpoint
+acts as a readiness check: the web process is reachable, but it is not ready to
+serve predictions. The endpoint accepts `GET` requests. Other methods,
+including `POST`, return HTTP 405 Method Not Allowed.
