@@ -23,6 +23,7 @@ db.sqlite3
 data/*.csv
 
 # MLflow local data and model artifacts
+mlflow.db*
 mlruns/
 mlartifacts/
 artifacts/
