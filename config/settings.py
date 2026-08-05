@@ -17,6 +17,9 @@ import environ
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+CHURN_MODEL_PATH = BASE_DIR / "models" / "model.pkl"
+CHURN_MODEL_METADATA_PATH = BASE_DIR / "models" / "model_metadata.json"
+
 env = environ.Env(DJANGO_DEBUG=(bool, True))
 environ.Env.read_env(BASE_DIR / ".env")
 
