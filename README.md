@@ -1,17 +1,18 @@
 # Telecom Customer Churn MLOps
 
-This repository is the foundation for a Telecom Customer Churn MLOps project.
-It currently provides a Django REST Framework API, environment-based settings,
-quality tooling, and a tested health endpoint. Model training, prediction logic,
-MLflow experiments, the Streamlit dashboard, Docker images, and CI/CD workflows
+This repository provides the foundation and model-training workflow for a
+Telecom Customer Churn MLOps project. It includes a Django REST Framework API,
+a safe IBM dataset downloader, reproducible scikit-learn training, local MLflow
+experiment tracking, model selection, artifact persistence, and automated tests.
+REST prediction, the Streamlit dashboard, Docker images, and CI/CD workflows
 belong to later project phases.
 
 ## Technology stack
 
 - Python 3.11 and uv for the runtime and dependency management
 - Django and Django REST Framework for the API
-- pandas, scikit-learn, and joblib for future data and model work
-- MLflow for future experiment tracking
+- pandas, scikit-learn, and joblib for preprocessing, training, and persistence
+- MLflow for local experiment tracking and model artifacts
 - Streamlit for the future dashboard
 - requests for HTTP clients
 - Psycopg for future PostgreSQL connectivity
@@ -55,6 +56,90 @@ Use `uv add <package>` for a production dependency and
 `uv add --dev <package>` for a development dependency. Commit both
 `pyproject.toml` and `uv.lock` when dependencies change.
 
+## Dataset
+
+The project uses the public
+[IBM Telco Customer Churn dataset](https://github.com/IBM/telco-customer-churn-on-icp4d).
+It contains 7,043 fictional telecom customers and 21 columns. `Churn` is the
+Yes/No target. After removing `customerID` and the target, 19 model features
+remain.
+
+Download the pinned and checksum-verified CSV to `data/telco_churn.csv`:
+
+```bash
+uv run python manage.py download_churn_data
+```
+
+The command validates all required columns and will not silently replace an
+existing dataset. To intentionally download it again, use:
+
+```bash
+uv run python manage.py download_churn_data --overwrite
+```
+
+Downloaded data is local and ignored by Git. Tests mock HTTP requests and do
+not require network access. The explicitly marked model-quality test uses the
+local CSV when it is available.
+
+## Train churn models
+
+Download the dataset first, then train and compare all configured models:
+
+```bash
+uv run python manage.py train_churn_model
+```
+
+Training performs one stratified 80/20 split with `random_state=42`. It compares
+balanced logistic regression and balanced random forest classifiers. Each
+candidate is one complete scikit-learn pipeline containing `TotalCharges`
+cleaning, automatic numerical/categorical preprocessing, scaling, one-hot
+encoding, and the classifier. Saving the whole pipeline keeps training and
+future API inference transformations consistent.
+
+The winning pipeline and its calculated metadata are written to:
+
+```text
+models/model.pkl
+models/model_metadata.json
+```
+
+These generated files are ignored by Git. Only load joblib model files produced
+by a trusted training workflow.
+
+### Class imbalance and metrics
+
+Only about 26.5% of the customers in this dataset churn. Both classifiers use
+balanced class weights so mistakes on the smaller churn class receive more
+importance during fitting.
+
+Every model is evaluated with:
+
+- **ROC-AUC**, which measures ranking quality across classification thresholds
+  and is the model-selection metric;
+- **PR-AUC** (average precision), which emphasizes precision and recall for the
+  minority churn class and is especially informative for imbalanced data;
+- **F1**, which summarizes the balance between precision and recall at the
+  classifier's decision threshold.
+
+Accuracy is not used as the main selection metric because an imbalanced model
+can appear accurate simply by favoring the majority non-churn class.
+
+## MLflow
+
+Training creates or reuses a local experiment named `telecom-churn`. It creates
+one clearly named run per candidate and logs parameters, ROC-AUC, PR-AUC, F1,
+and the complete fitted pipeline. MLflow uses a project-local SQLite database
+and local artifact directory; no external or paid tracking server is required.
+
+Start the local MLflow interface from the project root:
+
+```bash
+uv run mlflow ui
+```
+
+Open `http://127.0.0.1:5000` to compare runs and inspect artifacts. Local MLflow
+database and artifact files are ignored by Git.
+
 ## Database migrations
 
 Apply the built-in Django migrations to the local SQLite database:
@@ -87,6 +172,10 @@ The API is then available at `http://127.0.0.1:8000/api/`.
 ```bash
 uv run pytest -v
 ```
+
+For the full model-quality assertion, download the dataset before running the
+tests. Without the local CSV, that explicitly marked integration test is
+skipped while the network-independent unit tests still run.
 
 ## Run Ruff
 
