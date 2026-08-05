@@ -1,6 +1,7 @@
 # Virtual environments and environment files
 .venv/
 .env
+.streamlit/secrets.toml
 
 # Python cache and build output
 __pycache__/
