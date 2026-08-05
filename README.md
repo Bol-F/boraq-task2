@@ -4,8 +4,8 @@ This repository provides the foundation and model-training workflow for a
 Telecom Customer Churn MLOps project. It includes a Django REST Framework API,
 a safe IBM dataset downloader, reproducible scikit-learn training, local MLflow
 experiment tracking, model selection, artifact persistence, a documented churn
-prediction endpoint, and automated tests. The Streamlit dashboard, Docker
-images, and CI/CD workflows belong to later project phases.
+prediction endpoint, a Streamlit dashboard, and automated tests. Docker images
+and CI/CD workflows belong to later project phases.
 
 ## Technology stack
 
@@ -14,7 +14,7 @@ images, and CI/CD workflows belong to later project phases.
 - drf-spectacular for OpenAPI schema generation and Swagger UI
 - pandas, scikit-learn, and joblib for preprocessing, training, and persistence
 - MLflow for local experiment tracking and model artifacts
-- Streamlit for the future dashboard
+- Streamlit for the customer churn dashboard
 - requests for HTTP clients
 - Psycopg for future PostgreSQL connectivity
 - Gunicorn for production serving on supported platforms
@@ -275,6 +275,58 @@ PowerShell users can use `curl.exe` with equivalent quoting or
 With Django running, interactive Swagger documentation is available at
 `http://127.0.0.1:8000/api/docs/`. The generated OpenAPI schema is available at
 `http://127.0.0.1:8000/api/schema/`.
+
+## Streamlit dashboard
+
+The dashboard at `dashboard/app.py` provides a guided form for all 19 customer
+features, displays prediction results, and reports API/model readiness. It is a
+presentation client: it sends HTTP requests to Django and never imports or
+loads `models/model.pkl` itself. Django remains responsible for validation,
+preprocessing, and inference.
+
+The dashboard reads the Django base URL from `API_URL` and defaults to
+`http://127.0.0.1:8000`. You can set it in the ignored local `.env` file:
+
+```dotenv
+API_URL=http://127.0.0.1:8000
+```
+
+Use only the base URL; the dashboard safely adds `/api/health/` and
+`/api/predict/`. Do not include either endpoint path in `API_URL`.
+
+Run Django in the first terminal:
+
+```bash
+uv run python manage.py runserver
+```
+
+Run Streamlit from the project root in a second terminal:
+
+```bash
+uv run streamlit run dashboard/app.py
+```
+
+The normal local URLs are:
+
+- Django API: `http://127.0.0.1:8000/api/`
+- Streamlit dashboard: `http://127.0.0.1:8501`
+
+The expected workflow is:
+
+1. The cached sidebar health check confirms that Django is reachable and the
+   prediction model is loaded.
+2. A user completes the customer form and selects **Predict churn risk**.
+3. Streamlit sends one JSON request to `POST /api/predict/`.
+4. The dashboard displays the probability, Boolean threshold result, risk
+   level, neutral interpretation, and model version returned by Django.
+
+If the dashboard reports a connection error, confirm that Django is running,
+that `API_URL` uses the correct host and port, and that
+`http://127.0.0.1:8000/api/health/` is reachable. An HTTP 503 health response
+means Django is reachable but the local model or metadata is unavailable; run
+the training command to recreate those ignored artifacts. The dashboard stays
+available during these failures and shows a safe error instead of a Python
+traceback.
 
 ## Run tests
 
