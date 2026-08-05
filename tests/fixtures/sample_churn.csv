@@ -1,0 +1,13 @@
+customerID,gender,SeniorCitizen,Partner,Dependents,tenure,PhoneService,MultipleLines,InternetService,OnlineSecurity,OnlineBackup,DeviceProtection,TechSupport,StreamingTV,StreamingMovies,Contract,PaperlessBilling,PaymentMethod,MonthlyCharges,TotalCharges,Churn
+0001-A,Female,0,Yes,No,1,No,No phone service,DSL,No,Yes,No,No,No,No,Month-to-month,Yes,Electronic check,29.85,,No
+0002-B,Male,1,No,No,2,Yes,No,Fiber optic,No,No,Yes,No,Yes,Yes,Month-to-month,Yes,Electronic check,89.10,178.20,Yes
+0003-C,Female,0,No,Yes,6,Yes,Yes,DSL,Yes,No,No,Yes,No,No,One year,No,Mailed check,45.00,270.00,No
+0004-D,Male,0,Yes,Yes,48,Yes,No,No,No internet service,No internet service,No internet service,No internet service,No internet service,No internet service,Two year,No,Bank transfer (automatic),20.00,960.00,No
+0005-E,Female,1,No,No,3,Yes,Yes,Fiber optic,No,No,No,No,Yes,Yes,Month-to-month,Yes,Electronic check,99.65,298.95,Yes
+0006-F,Male,0,Yes,No,24,Yes,No,DSL,Yes,Yes,Yes,Yes,No,No,One year,No,Credit card (automatic),55.20,1324.80,No
+0007-G,Female,0,Yes,Yes,72,Yes,Yes,No,No internet service,No internet service,No internet service,No internet service,No internet service,No internet service,Two year,No,Bank transfer (automatic),25.10,1807.20,No
+0008-H,Male,1,No,No,12,Yes,Yes,Fiber optic,No,Yes,Yes,No,Yes,Yes,Month-to-month,Yes,Electronic check,105.50,1266.00,Yes
+0009-I,Female,0,No,No,8,No,No phone service,DSL,No,No,No,No,No,No,Month-to-month,Yes,Mailed check,34.25,274.00,Yes
+0010-J,Male,0,Yes,Yes,36,Yes,No,DSL,Yes,Yes,Yes,Yes,No,No,One year,No,Credit card (automatic),64.40,2318.40,No
+0011-K,Female,1,Yes,No,1,Yes,Yes,Fiber optic,No,No,No,No,Yes,Yes,Month-to-month,Yes,Electronic check,110.50,invalid,Yes
+0012-L,Male,0,No,No,18,Yes,No,No,No internet service,No internet service,No internet service,No internet service,No internet service,No internet service,Two year,No,Mailed check,19.80,356.40,Yes

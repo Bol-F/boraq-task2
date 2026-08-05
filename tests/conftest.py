@@ -9,36 +9,17 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from numpy.random import default_rng
 from rest_framework.test import APIClient
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
+from ml_pipeline.services.data import MODEL_FEATURE_COLUMNS, load_churn_data
+from ml_pipeline.services.preprocessing import load_features_and_target
 from predictions.services.model_loader import reset_model_cache
 
 TEST_MODEL_VERSION = "test-2.4.6"
-MODEL_FEATURE_NAMES = (
-    "gender",
-    "SeniorCitizen",
-    "Partner",
-    "Dependents",
-    "tenure",
-    "PhoneService",
-    "MultipleLines",
-    "InternetService",
-    "OnlineSecurity",
-    "OnlineBackup",
-    "DeviceProtection",
-    "TechSupport",
-    "StreamingTV",
-    "StreamingMovies",
-    "Contract",
-    "PaperlessBilling",
-    "PaymentMethod",
-    "MonthlyCharges",
-    "TotalCharges",
-)
+TEST_FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 class DeterministicChurnClassifier(ClassifierMixin, BaseEstimator):
@@ -102,7 +83,7 @@ def build_deterministic_pipeline() -> Pipeline:
         "MonthlyCharges": 50.0,
         "TotalCharges": 50.0,
     }
-    features = pd.DataFrame([example_customer], columns=MODEL_FEATURE_NAMES)
+    features = pd.DataFrame([example_customer], columns=MODEL_FEATURE_COLUMNS)
     pipeline = Pipeline(
         steps=[
             ("feature_cleaning", FunctionTransformer(validate=False)),
@@ -201,70 +182,19 @@ def model_artifacts(tmp_path: Path, settings: object) -> TemporaryModelArtifacts
     )
 
 
+@pytest.fixture(scope="session")
+def sample_churn_path() -> Path:
+    """Return the tracked, deterministic churn CSV used by fast tests."""
+    return TEST_FIXTURES_DIR / "sample_churn.csv"
+
+
 @pytest.fixture
-def churn_dataframe() -> pd.DataFrame:
-    """Return a small dataframe shaped like the IBM churn dataset."""
-    return pd.DataFrame(
-        {
-            "customerID": ["0001-A", "0002-B", "0003-C", "0004-D"],
-            "gender": ["Female", "Male", "Female", "Male"],
-            "SeniorCitizen": [0, 1, 0, 1],
-            "Partner": ["Yes", "No", "No", "Yes"],
-            "Dependents": ["No", "No", "Yes", "Yes"],
-            "tenure": [1, 24, 6, 48],
-            "PhoneService": ["No", "Yes", "Yes", "Yes"],
-            "MultipleLines": [
-                "No phone service",
-                "No",
-                "Yes",
-                "No",
-            ],
-            "InternetService": ["DSL", "Fiber optic", "DSL", "No"],
-            "OnlineSecurity": ["No", "No", "Yes", "No internet service"],
-            "OnlineBackup": ["Yes", "No", "No", "No internet service"],
-            "DeviceProtection": ["No", "Yes", "No", "No internet service"],
-            "TechSupport": ["No", "No", "Yes", "No internet service"],
-            "StreamingTV": ["No", "Yes", "No", "No internet service"],
-            "StreamingMovies": ["No", "Yes", "No", "No internet service"],
-            "Contract": [
-                "Month-to-month",
-                "Month-to-month",
-                "One year",
-                "Two year",
-            ],
-            "PaperlessBilling": ["Yes", "Yes", "No", "No"],
-            "PaymentMethod": [
-                "Electronic check",
-                "Credit card (automatic)",
-                "Mailed check",
-                "Bank transfer (automatic)",
-            ],
-            "MonthlyCharges": [29.85, 89.10, 45.00, 20.00],
-            "TotalCharges": ["29.85", " ", "invalid", "960.0"],
-            "Churn": ["No", "Yes", "No", "Yes"],
-        }
-    )
+def churn_dataframe(sample_churn_path: Path) -> pd.DataFrame:
+    """Return an isolated copy of the complete sample churn dataset."""
+    return load_churn_data(sample_churn_path).copy(deep=True)
 
 
 @pytest.fixture(scope="module")
 def training_dataset() -> tuple[pd.DataFrame, pd.Series]:
-    """Return a reproducible imbalanced dataset for fast model unit tests."""
-    random = default_rng(42)
-    target_values = [0] * 60 + [1] * 20
-    random.shuffle(target_values)
-    target = pd.Series(target_values, name="Churn", dtype="int8")
-    tenure = random.integers(1, 73, size=len(target))
-    monthly_charges = random.normal(
-        loc=target.map({0: 55.0, 1: 85.0}),
-        scale=8.0,
-    )
-    features = pd.DataFrame(
-        {
-            "gender": random.choice(["Female", "Male"], size=len(target)),
-            "tenure": tenure,
-            "Contract": target.map({0: "Two year", 1: "Month-to-month"}),
-            "MonthlyCharges": monthly_charges,
-            "TotalCharges": tenure * monthly_charges,
-        }
-    )
-    return features, target
+    """Return all production features from the deterministic sample CSV."""
+    return load_features_and_target(TEST_FIXTURES_DIR / "sample_churn.csv")

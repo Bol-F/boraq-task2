@@ -30,7 +30,9 @@ python_files = ["test_*.py"]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
 markers = [
-    "integration: uses the locally downloaded dataset without network access",
+    "unit: fast isolated tests using local fixtures and mocks",
+    "integration: tests multiple application layers using local resources",
+    "model_quality: evaluates the production pipeline on the real churn dataset",
 ]
 
 [tool.ruff]

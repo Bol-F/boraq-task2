@@ -14,18 +14,16 @@ from ml_pipeline.services.preprocessing import (
     prepare_features_and_target,
 )
 
+pytestmark = pytest.mark.unit
+
 
 def test_dataset_loading_reads_csv(
-    tmp_path: Path,
-    churn_dataframe: pd.DataFrame,
+    sample_churn_path: Path,
 ) -> None:
-    dataset_path = tmp_path / "churn.csv"
-    churn_dataframe.to_csv(dataset_path, index=False)
+    loaded = load_churn_data(sample_churn_path)
 
-    loaded = load_churn_data(dataset_path)
-
-    assert len(loaded) == len(churn_dataframe)
-    assert list(loaded.columns) == list(churn_dataframe.columns)
+    assert len(loaded) == 12
+    assert "Churn" in loaded.columns
 
 
 def test_dataset_loading_requires_expected_columns(
@@ -45,7 +43,7 @@ def test_total_charges_is_converted_to_a_numeric_column(
     features, _target = prepare_features_and_target(churn_dataframe)
 
     assert pd.api.types.is_numeric_dtype(features["TotalCharges"])
-    assert features.loc[0, "TotalCharges"] == pytest.approx(29.85)
+    assert features.loc[1, "TotalCharges"] == pytest.approx(178.2)
 
 
 def test_blank_and_invalid_total_charges_are_replaced_with_zero(
@@ -53,8 +51,8 @@ def test_blank_and_invalid_total_charges_are_replaced_with_zero(
 ) -> None:
     features, _target = prepare_features_and_target(churn_dataframe)
 
-    assert features.loc[1, "TotalCharges"] == 0.0
-    assert features.loc[2, "TotalCharges"] == 0.0
+    assert features.loc[0, "TotalCharges"] == 0.0
+    assert features.loc[10, "TotalCharges"] == 0.0
 
 
 def test_customer_id_is_removed_from_model_features(
@@ -70,8 +68,16 @@ def test_target_is_converted_to_zero_and_one(
 ) -> None:
     _features, target = prepare_features_and_target(churn_dataframe)
 
-    assert target.tolist() == [0, 1, 0, 1]
     assert set(target.unique()) == {0, 1}
+    assert target.value_counts().to_dict() == {0: 6, 1: 6}
+
+
+def test_features_and_target_have_matching_row_counts(
+    churn_dataframe: pd.DataFrame,
+) -> None:
+    features, target = prepare_features_and_target(churn_dataframe)
+
+    assert len(features) == len(target) == len(churn_dataframe)
 
 
 def test_feature_columns_are_detected_from_dtypes(
@@ -106,3 +112,29 @@ def test_preprocessor_uses_scaling_and_unknown_safe_encoding(
     assert isinstance(transformers["numerical"], StandardScaler)
     assert isinstance(transformers["categorical"], OneHotEncoder)
     assert transformers["categorical"].handle_unknown == "ignore"
+
+
+def test_preprocessor_can_fit_and_transform(
+    churn_dataframe: pd.DataFrame,
+) -> None:
+    features, _target = prepare_features_and_target(churn_dataframe)
+    preprocessor = build_preprocessor(features)
+
+    transformed = preprocessor.fit_transform(features)
+
+    assert transformed.shape[0] == len(features)
+    assert transformed.shape[1] > len(features.columns)
+
+
+def test_preprocessor_accepts_unknown_categorical_values(
+    churn_dataframe: pd.DataFrame,
+) -> None:
+    features, _target = prepare_features_and_target(churn_dataframe)
+    preprocessor = build_preprocessor(features)
+    fitted = preprocessor.fit_transform(features)
+    unknown_customer = features.head(1).copy()
+    unknown_customer.loc[:, "PaymentMethod"] = "Cryptocurrency"
+
+    transformed = preprocessor.transform(unknown_customer)
+
+    assert transformed.shape == (1, fitted.shape[1])
