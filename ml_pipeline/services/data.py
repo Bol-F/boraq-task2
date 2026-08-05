@@ -42,6 +42,9 @@ REQUIRED_COLUMNS = (
     "TotalCharges",
     "Churn",
 )
+MODEL_FEATURE_COLUMNS = tuple(
+    column for column in REQUIRED_COLUMNS if column not in {"customerID", "Churn"}
+)
 
 
 class DatasetValidationError(ValueError):

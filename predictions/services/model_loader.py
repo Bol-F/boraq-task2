@@ -13,12 +13,14 @@ from django.conf import settings
 from sklearn.exceptions import InconsistentVersionWarning
 from sklearn.pipeline import Pipeline
 
+from ml_pipeline.services.data import MODEL_FEATURE_COLUMNS
+
 MODEL_UNAVAILABLE_DETAIL = "Prediction model is not available."
-REQUIRED_PIPELINE_STEPS = {
+REQUIRED_PIPELINE_STEPS = (
     "feature_cleaning",
     "preprocessing",
     "classifier",
-}
+)
 
 
 class ModelUnavailableError(RuntimeError):
@@ -39,14 +41,27 @@ _cache_lock = RLock()
 def _validate_pipeline(pipeline: object) -> Pipeline:
     if not isinstance(pipeline, Pipeline):
         raise TypeError("Saved model is not a scikit-learn Pipeline.")
-    if not REQUIRED_PIPELINE_STEPS.issubset(pipeline.named_steps):
-        raise ValueError("Saved pipeline is missing required steps.")
+    if tuple(pipeline.named_steps) != REQUIRED_PIPELINE_STEPS:
+        raise ValueError("Saved pipeline has incompatible steps.")
     if not callable(getattr(pipeline, "predict_proba", None)):
         raise TypeError("Saved pipeline does not support probability prediction.")
 
     classes = np.asarray(getattr(pipeline, "classes_", []))
-    if classes.ndim != 1 or classes.size < 2 or np.count_nonzero(classes == 1) != 1:
-        raise ValueError("Saved pipeline does not contain positive class 1.")
+    has_binary_classes = (
+        classes.ndim == 1
+        and classes.size == 2
+        and np.count_nonzero(classes == 0) == 1
+        and np.count_nonzero(classes == 1) == 1
+    )
+    if not has_binary_classes:
+        raise ValueError("Saved pipeline does not contain binary classes 0 and 1.")
+
+    feature_names = np.asarray(getattr(pipeline, "feature_names_in_", []))
+    if (
+        feature_names.ndim != 1
+        or tuple(feature_names.tolist()) != MODEL_FEATURE_COLUMNS
+    ):
+        raise ValueError("Saved pipeline expects incompatible feature columns.")
     return pipeline
 
 

@@ -54,19 +54,18 @@ def predict_customer_churn(customer: Mapping[str, object]) -> PredictionResult:
         classes = np.asarray(bundle.pipeline.classes_)
         positive_class_index = int(np.flatnonzero(classes == 1)[0])
 
-        if probabilities.ndim != 2 or probabilities.shape[0] != 1:
+        if probabilities.shape != (1, classes.size):
             raise ValueError("Prediction output has an unexpected shape.")
-        if positive_class_index >= probabilities.shape[1]:
-            raise ValueError("Prediction output is missing the positive class.")
 
         probability = float(probabilities[0, positive_class_index])
         if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
             raise ValueError("Prediction probability is outside the valid range.")
+        rounded_probability = round(probability, PROBABILITY_DECIMAL_PLACES)
 
         return PredictionResult(
-            churn_probability=round(probability, PROBABILITY_DECIMAL_PLACES),
-            will_churn=bool(probability >= CHURN_THRESHOLD),
-            risk=get_risk_level(probability),
+            churn_probability=rounded_probability,
+            will_churn=bool(rounded_probability >= CHURN_THRESHOLD),
+            risk=get_risk_level(rounded_probability),
             model_version=bundle.model_version,
         )
     except ModelUnavailableError:
