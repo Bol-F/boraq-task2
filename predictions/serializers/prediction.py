@@ -96,3 +96,27 @@ class PredictionRequestSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+
+class PredictionResponseSerializer(serializers.Serializer):
+    """Document the successful prediction response."""
+
+    churn_probability = serializers.FloatField(min_value=0.0, max_value=1.0)
+    will_churn = serializers.BooleanField()
+    risk = serializers.ChoiceField(choices=("low", "medium", "high"))
+    model_version = serializers.CharField()
+
+
+class ModelUnavailableResponseSerializer(serializers.Serializer):
+    """Document the stable response returned when prediction is unavailable."""
+
+    detail = serializers.CharField()
+
+
+class HealthResponseSerializer(serializers.Serializer):
+    """Document ready and degraded health response fields."""
+
+    status = serializers.ChoiceField(choices=("ok", "degraded"))
+    service = serializers.CharField()
+    model_loaded = serializers.BooleanField()
+    model_version = serializers.CharField(allow_null=True)

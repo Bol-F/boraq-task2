@@ -1,5 +1,15 @@
 """Serializers for prediction API requests and responses."""
 
-from predictions.serializers.prediction import PredictionRequestSerializer
+from predictions.serializers.prediction import (
+    HealthResponseSerializer,
+    ModelUnavailableResponseSerializer,
+    PredictionRequestSerializer,
+    PredictionResponseSerializer,
+)
 
-__all__ = ["PredictionRequestSerializer"]
+__all__ = [
+    "HealthResponseSerializer",
+    "ModelUnavailableResponseSerializer",
+    "PredictionRequestSerializer",
+    "PredictionResponseSerializer",
+]

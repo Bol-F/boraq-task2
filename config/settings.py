@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "drf_spectacular",
     "rest_framework",
     "predictions",
     "ml_pipeline",
@@ -139,6 +140,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework
 
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
@@ -146,4 +148,20 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Telecom Customer Churn API",
+    "DESCRIPTION": (
+        "Predict customer churn with the locally trained scikit-learn pipeline."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "ENUM_NAME_OVERRIDES": {
+        "InternetAddonEnum": (
+            "predictions.serializers.prediction.INTERNET_ADDON_CHOICES"
+        ),
+        "YesNoEnum": "predictions.serializers.prediction.YES_NO_CHOICES",
+    },
 }
