@@ -9,7 +9,7 @@ from typing import Literal
 
 import streamlit as st
 
-from dashboard.api_client import ApiError, PredictionData
+from dashboard.api_client import ApiError, ApiResult, HealthData, PredictionData
 from dashboard.constants import (
     CONTRACT_CHOICES,
     GENDER_CHOICES,
@@ -140,6 +140,29 @@ def render_prediction_result(prediction: PredictionData) -> None:
     risk_message = f"{risk.label} RISK — {risk.interpretation}"
     getattr(st, risk.status)(risk_message)
     st.caption("This result is an estimate and should not be treated as certain.")
+
+
+def render_health_status(
+    result: ApiResult[HealthData],
+    api_base_url: str,
+) -> None:
+    """Show API reachability and model readiness in the current container."""
+    st.caption(f"API: {api_base_url}")
+    if not result.is_success or result.data is None:
+        st.error("API availability: Unavailable")
+        st.write("Prediction model: Unknown")
+        st.write("Model version: Unknown")
+        if result.error is not None:
+            st.caption(result.error.message)
+        return
+
+    health = result.data
+    st.success("API availability: Available")
+    if health.model_loaded:
+        st.success("Prediction model: Loaded")
+    else:
+        st.warning("Prediction model: Not loaded")
+    st.write(f"Model version: {health.model_version or 'Not available'}")
 
 
 def render_customer_form() -> CustomerPayload | None:

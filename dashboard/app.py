@@ -7,12 +7,19 @@ from pathlib import Path
 import environ
 import streamlit as st
 
-from dashboard.api_client import ApiResult, PredictionData, get_api_base_url
+from dashboard.api_client import (
+    ApiResult,
+    HealthData,
+    PredictionData,
+    get_api_base_url,
+    get_health_status,
+)
 from dashboard.api_client import predict_customer as request_prediction
 from dashboard.components import (
     DashboardValidationError,
     render_api_error,
     render_customer_form,
+    render_health_status,
     render_prediction_result,
 )
 
@@ -25,6 +32,12 @@ def load_local_environment() -> None:
     environment_path = PROJECT_ROOT / ".env"
     if environment_path.is_file():
         environ.Env.read_env(environment_path)
+
+
+@st.cache_data(ttl=30, show_spinner=False, max_entries=8)
+def load_health_status(api_base_url: str) -> ApiResult[HealthData]:
+    """Cache short-lived readiness results across Streamlit widget reruns."""
+    return get_health_status(base_url=api_base_url)
 
 
 def main() -> None:
@@ -46,6 +59,14 @@ def main() -> None:
         "Use it as one input to a broader review."
     )
 
+    api_base_url = get_api_base_url()
+    with st.sidebar:
+        st.header("API status")
+        if st.button("Refresh API status", use_container_width=True):
+            load_health_status.clear()
+        health_result = load_health_status(api_base_url)
+        render_health_status(health_result, api_base_url)
+
     try:
         customer_payload = render_customer_form()
     except DashboardValidationError as error:
@@ -55,7 +76,7 @@ def main() -> None:
             with st.spinner("Calculating churn risk..."):
                 result = request_prediction(
                     customer_payload,
-                    base_url=get_api_base_url(),
+                    base_url=api_base_url,
                 )
             st.session_state[PREDICTION_RESULT_KEY] = result
 
