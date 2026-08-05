@@ -1,0 +1,33 @@
+# Virtual environments and environment files
+.venv/
+.env
+
+# Python cache and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test, lint, and coverage output
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Django local data
+db.sqlite3
+
+# MLflow local data and model artifacts
+mlruns/
+mlartifacts/
+artifacts/
+
+# Logs and temporary operating-system files
+*.log
+.DS_Store
+
+# Editor settings
+.vscode/
+.idea/
