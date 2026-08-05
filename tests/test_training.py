@@ -178,3 +178,36 @@ def test_training_command_reports_a_missing_dataset(
 
     with pytest.raises(CommandError, match="download_churn_data"):
         call_command("train_churn_model")
+
+
+def test_training_command_writes_requested_candidate_paths(
+    tmp_path: Path,
+    sample_churn_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_path = tmp_path / "candidate" / "model.pkl"
+    metadata_path = tmp_path / "candidate" / "model_metadata.json"
+    monkeypatch.setattr(command_module, "get_dataset_path", lambda: sample_churn_path)
+    monkeypatch.setattr(
+        command_module,
+        "track_training_results",
+        lambda summary: TrackingSummary(
+            experiment_id="test-experiment",
+            run_ids={
+                result.model_name: f"test-{result.model_name}-run"
+                for result in summary.results
+            },
+            tracking_uri="sqlite:///test.db",
+        ),
+    )
+
+    call_command(
+        "train_churn_model",
+        "--model-path",
+        str(model_path),
+        "--metadata-path",
+        str(metadata_path),
+    )
+
+    assert model_path.is_file()
+    assert metadata_path.is_file()

@@ -5,7 +5,7 @@ import json
 import joblib
 import pytest
 
-from predictions.services import model_loader
+from ml_pipeline.services import model_validation
 from predictions.services.model_loader import (
     MODEL_UNAVAILABLE_DETAIL,
     ModelUnavailableError,
@@ -18,20 +18,20 @@ def test_model_bundle_cache_reuses_one_joblib_load(
     model_artifacts: object,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original_load = model_loader.joblib.load
+    original_load = model_validation.joblib.load
     loaded_paths: list[object] = []
 
     def counting_load(path: object) -> object:
         loaded_paths.append(path)
         return original_load(path)
 
-    monkeypatch.setattr(model_loader.joblib, "load", counting_load)
+    monkeypatch.setattr(model_validation.joblib, "load", counting_load)
 
     first_bundle = get_model_bundle()
     second_bundle = get_model_bundle()
 
     assert first_bundle is second_bundle
-    assert loaded_paths == [str(model_artifacts.model_path)]
+    assert loaded_paths == [model_artifacts.model_path]
 
 
 def test_model_cache_can_be_reset_explicitly(model_artifacts: object) -> None:

@@ -4,9 +4,8 @@ import pytest
 
 from ml_pipeline.services.data import get_dataset_path
 from ml_pipeline.services.preprocessing import load_features_and_target
+from ml_pipeline.services.promotion import MINIMUM_ROC_AUC
 from ml_pipeline.services.training import get_model_candidates, train_and_compare
-
-MINIMUM_ROC_AUC = 0.78
 
 pytestmark = [pytest.mark.integration, pytest.mark.model_quality]
 

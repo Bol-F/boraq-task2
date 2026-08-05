@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from django.core.management.base import BaseCommand, CommandError
+from pathlib import Path
+
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from ml_pipeline.services.data import get_dataset_path
 from ml_pipeline.services.metadata import save_training_artifacts
@@ -42,6 +44,18 @@ def format_comparison_table(summary: TrainingSummary) -> str:
 class Command(BaseCommand):
     help = "Train, compare, and track Telecom Customer Churn models."
 
+    def add_arguments(self, parser: CommandParser) -> None:
+        parser.add_argument(
+            "--model-path",
+            type=Path,
+            help="Optional output path for the winning model pipeline.",
+        )
+        parser.add_argument(
+            "--metadata-path",
+            type=Path,
+            help="Optional output path for the model metadata JSON.",
+        )
+
     def handle(self, *args: object, **options: object) -> None:
         dataset_path = get_dataset_path()
         if not dataset_path.is_file():
@@ -59,6 +73,8 @@ class Command(BaseCommand):
                 tracking,
                 dataset_rows=len(features),
                 feature_count=features.shape[1],
+                model_path=options["model_path"],
+                metadata_path=options["metadata_path"],
             )
         except Exception as error:
             raise CommandError(f"Model training failed: {error}") from error

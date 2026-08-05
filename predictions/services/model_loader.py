@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 import json
-import warnings
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from threading import RLock
 
-import joblib
-import numpy as np
 from django.conf import settings
-from sklearn.exceptions import InconsistentVersionWarning
 from sklearn.pipeline import Pipeline
 
-from ml_pipeline.services.data import MODEL_FEATURE_COLUMNS
+from ml_pipeline.services.model_validation import load_validated_pipeline
 
 MODEL_UNAVAILABLE_DETAIL = "Prediction model is not available."
-REQUIRED_PIPELINE_STEPS = (
-    "feature_cleaning",
-    "preprocessing",
-    "classifier",
-)
 
 
 class ModelUnavailableError(RuntimeError):
@@ -36,33 +27,6 @@ class ModelBundle:
 
 
 _cache_lock = RLock()
-
-
-def _validate_pipeline(pipeline: object) -> Pipeline:
-    if not isinstance(pipeline, Pipeline):
-        raise TypeError("Saved model is not a scikit-learn Pipeline.")
-    if tuple(pipeline.named_steps) != REQUIRED_PIPELINE_STEPS:
-        raise ValueError("Saved pipeline has incompatible steps.")
-    if not callable(getattr(pipeline, "predict_proba", None)):
-        raise TypeError("Saved pipeline does not support probability prediction.")
-
-    classes = np.asarray(getattr(pipeline, "classes_", []))
-    has_binary_classes = (
-        classes.ndim == 1
-        and classes.size == 2
-        and np.count_nonzero(classes == 0) == 1
-        and np.count_nonzero(classes == 1) == 1
-    )
-    if not has_binary_classes:
-        raise ValueError("Saved pipeline does not contain binary classes 0 and 1.")
-
-    feature_names = np.asarray(getattr(pipeline, "feature_names_in_", []))
-    if (
-        feature_names.ndim != 1
-        or tuple(feature_names.tolist()) != MODEL_FEATURE_COLUMNS
-    ):
-        raise ValueError("Saved pipeline expects incompatible feature columns.")
-    return pipeline
 
 
 def _load_model_version(metadata_path: Path) -> str:
@@ -82,9 +46,7 @@ def _load_model_bundle(model_path_value: str, metadata_path_value: str) -> Model
         metadata_path = Path(metadata_path_value)
         model_version = _load_model_version(metadata_path)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", InconsistentVersionWarning)
-            pipeline = _validate_pipeline(joblib.load(model_path_value))
+        pipeline = load_validated_pipeline(Path(model_path_value))
 
         return ModelBundle(pipeline=pipeline, model_version=model_version)
     except Exception as error:

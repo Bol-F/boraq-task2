@@ -50,6 +50,10 @@ class DeterministicChurnClassifier(ClassifierMixin, BaseEstimator):
         probabilities = churn_probabilities.to_numpy(dtype=float)
         return np.column_stack((1.0 - probabilities, probabilities))
 
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        """Return deterministic labels using the production 0.5 threshold."""
+        return (self.predict_proba(features)[:, 1] >= 0.5).astype(int)
+
 
 @dataclass(frozen=True)
 class TemporaryModelArtifacts:
