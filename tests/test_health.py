@@ -1,29 +1,41 @@
-import pytest
+from __future__ import annotations
+
 from rest_framework.test import APIClient
 
-
-@pytest.fixture
-def api_client() -> APIClient:
-    """Return a client for making requests to the REST API."""
-    return APIClient()
+from predictions.services.model_loader import reset_model_cache
 
 
-def test_health_endpoint_returns_http_200(api_client: APIClient) -> None:
+def test_health_endpoint_reports_loaded_model(
+    api_client: APIClient,
+    model_artifacts: object,
+) -> None:
     response = api_client.get("/api/health/")
 
     assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "service": "churn-prediction-api",
+        "model_loaded": True,
+        "model_version": model_artifacts.model_version,
+    }
 
 
-def test_health_endpoint_returns_ok_status(api_client: APIClient) -> None:
+def test_health_endpoint_remains_available_without_model(
+    api_client: APIClient,
+    model_artifacts: object,
+) -> None:
+    model_artifacts.model_path.unlink()
+    reset_model_cache()
+
     response = api_client.get("/api/health/")
 
-    assert response.json()["status"] == "ok"
-
-
-def test_health_endpoint_returns_service_name(api_client: APIClient) -> None:
-    response = api_client.get("/api/health/")
-
-    assert response.json()["service"] == "churn-prediction-api"
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "degraded",
+        "service": "churn-prediction-api",
+        "model_loaded": False,
+        "model_version": None,
+    }
 
 
 def test_health_endpoint_rejects_post(api_client: APIClient) -> None:
