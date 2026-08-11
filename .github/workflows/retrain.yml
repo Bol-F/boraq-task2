@@ -135,6 +135,7 @@ jobs:
       contents: write  # Required only to push the approved artifact pair.
     outputs:
       promoted: ${{ steps.commit_model.outputs.promoted }}
+      render_triggered: ${{ steps.trigger_render.outputs.triggered }}
 
     steps:
       - name: Check out repository for promotion
@@ -169,6 +170,24 @@ jobs:
           git push origin "HEAD:${GITHUB_REF_NAME}"
           echo "promoted=true" >> "$GITHUB_OUTPUT"
 
+      - name: Trigger Render rebuild for promoted model
+        id: trigger_render
+        if: steps.commit_model.outputs.promoted == 'true'
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if test -z "$RENDER_DEPLOY_HOOK_URL"; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL is not configured; trigger Render manually."
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::add-mask::$RENDER_DEPLOY_HOOK_URL"
+          curl --fail --silent --show-error \
+            --request POST "$RENDER_DEPLOY_HOOK_URL" \
+            > /dev/null
+          echo "triggered=true" >> "$GITHUB_OUTPUT"
+
   summarize:
     name: Summarize retraining metrics
     needs:
@@ -192,6 +211,7 @@ jobs:
       - name: Write retraining job summary
         env:
           PROMOTED: ${{ needs.promote.outputs.promoted || 'false' }}
+          RENDER_TRIGGERED: ${{ needs.promote.outputs.render_triggered || 'false' }}
           PROMOTION_RESULT: ${{ needs.promote.result }}
           RETRAIN_RESULT: ${{ needs.retrain.result }}
         run: |
@@ -211,10 +231,12 @@ jobs:
               echo "| Retraining result | ${RETRAIN_RESULT} |"
               echo "| Promotion job result | ${PROMOTION_RESULT} |"
               echo "| Promoted to repository | ${PROMOTED} |"
+              echo "| Render rebuild triggered | ${RENDER_TRIGGERED} |"
             else
               echo "Training did not produce model metadata."
               echo
               echo "- Retraining result: ${RETRAIN_RESULT}"
               echo "- Promoted to repository: false"
+              echo "- Render rebuild triggered: false"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
