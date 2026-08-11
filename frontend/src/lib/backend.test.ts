@@ -26,8 +26,16 @@ describe("buildBackendUrl", () => {
     );
   });
 
-  it.each([undefined, "", "ftp://example.com", "not a URL"])(
-    "rejects missing or unsafe backend configuration: %s",
+  it("rejects an unavailable environment configuration", () => {
+    vi.stubEnv("RENDER_API_URL", "");
+
+    expect(() => buildBackendUrl("/api/health/")).toThrow(
+      BackendConfigurationError,
+    );
+  });
+
+  it.each(["", "ftp://example.com", "not a URL"])(
+    "rejects empty or unsafe explicit backend configuration: %s",
     (configuredUrl) => {
       expect(() =>
         buildBackendUrl("/api/health/", configuredUrl),
