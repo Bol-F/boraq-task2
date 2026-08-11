@@ -9,7 +9,7 @@ export default function Home() {
 
       <header className="site-header">
         <div className="shell site-header__inner">
-          <div className="brand" aria-label="ChurnSignal home">
+          <div className="brand">
             <span className="brand__mark" aria-hidden="true">
               <span />
               <span />
@@ -42,17 +42,17 @@ export default function Home() {
               <div>
                 <dt>Inputs</dt>
                 <dd>19</dd>
-                <p>customer signals</p>
+                <dd className="hero__metric-note">customer signals</dd>
               </div>
               <div>
                 <dt>Decision point</dt>
                 <dd>50%</dd>
-                <p>churn threshold</p>
+                <dd className="hero__metric-note">churn threshold</dd>
               </div>
               <div>
                 <dt>Engine</dt>
                 <dd>ML</dd>
-                <p>saved pipeline</p>
+                <dd className="hero__metric-note">saved pipeline</dd>
               </div>
             </dl>
           </div>

@@ -243,11 +243,13 @@ button:disabled {
   letter-spacing: -0.05em;
 }
 
-.hero__metrics p {
+.hero__metrics .hero__metric-note {
   margin: 0;
   overflow: hidden;
   color: var(--ink-soft);
   font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -445,7 +447,7 @@ button:disabled {
 }
 
 .field-hint {
-  color: #718077;
+  color: #627067;
 }
 
 .field-error {
@@ -975,7 +977,7 @@ button:disabled {
     font-size: 1.35rem;
   }
 
-  .hero__metrics p {
+  .hero__metrics .hero__metric-note {
     font-size: 0.61rem;
   }
 
