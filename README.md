@@ -803,8 +803,9 @@ Render's rollback controls and investigate before promoting it again.
 ## Deploy the Next.js frontend to Vercel
 
 `frontend/` is an independent Next.js application. `frontend/vercel.json`
-selects Next.js and makes `npm run verify`—lint, tests, type checking, and the
-production build—the deployment build command. `package.json` and
+selects Next.js and runs `npm run build` for the production deployment. CI
+separately runs lint, tests, type checking, and the same production build
+before a revision is eligible for deployment. `package.json` and
 `package-lock.json` are the frontend dependency sources of truth; the Python
 lock files remain authoritative for Django and Streamlit.
 

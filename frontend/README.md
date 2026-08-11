@@ -49,9 +49,9 @@ npm run build
 
 Import the repository into Vercel, set the root directory to `frontend`, and
 configure `RENDER_API_URL` with the verified HTTPS base URL of the Render API
-for Preview and Production. The committed `vercel.json` runs the complete
-verification command during every build. Redeploy after changing environment
-variables.
+for Preview and Production. The committed `vercel.json` runs the production
+build; GitHub Actions runs the complete lint, test, type-check, and build gate.
+Redeploy after changing environment variables.
 
 Do not add a deployment URL to project documentation until the health proxy,
 prediction proxy, browser form, and real model response have all been verified.
