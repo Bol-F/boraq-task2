@@ -9,9 +9,19 @@ Automated tests, a real ROC-AUC quality gate, Docker, GitHub Actions CI,
 guarded weekly retraining, and deployment manifests complete the delivery
 workflow.
 
-The repository contains deployment configuration, but it does not claim a live
-API or frontend. Add public links only after deploying and verifying both
-services.
+The production API and frontend are deployed and verified against model version
+`1.0.0`.
+
+## Live deployment
+
+- Frontend: [https://boraq-task2.vercel.app](https://boraq-task2.vercel.app)
+- API health: [https://telecom-churn-api-q92o.onrender.com/api/health/](https://telecom-churn-api-q92o.onrender.com/api/health/)
+- Swagger API documentation: [https://telecom-churn-api-q92o.onrender.com/api/docs/](https://telecom-churn-api-q92o.onrender.com/api/docs/)
+- Prediction API: `POST https://telecom-churn-api-q92o.onrender.com/api/predict/`
+
+The public routes were last verified on August 11, 2026. The Vercel frontend
+uses same-origin server routes, so the Render origin remains outside the browser
+bundle.
 
 ## Technology stack
 
@@ -902,8 +912,8 @@ added. Revisit this only if a future browser bundle calls Django directly.
   automation are not implemented.
 - SQLite is sufficient because inference stores no application data; a future
   stateful service would need a managed database and migration strategy.
-- No live deployment URLs are included until the API and Next.js frontend are
-  actually deployed and verified.
+- Render's free service tier may cold-start after inactivity, so the first API
+  request can take longer than later requests.
 
 ## Submission checklist
 
@@ -913,14 +923,14 @@ added. Revisit this only if a future browser bundle calls Django directly.
 - [x] Local MLflow runs and artifacts can be viewed
 - [x] Approved `models/model.pkl` exists
 - [x] `models/model_metadata.json` exists
-- [x] Prediction API works locally
-- [x] API documentation works locally
+- [x] Prediction API works locally and on Render
+- [x] API documentation works locally and on Render
 - [x] Next.js frontend, same-origin proxy, and component tests pass locally
 - [x] Streamlit dashboard client and components pass locally
 - [x] Complete tests pass locally
 - [x] Model-quality gate passes locally
-- [ ] CI workflow is green on GitHub after this branch is merged and run
+- [x] CI workflow is green on GitHub
 - [x] Weekly retraining workflow exists
 - [x] Docker image build and API container endpoints are verified locally
 - [x] Render and Vercel deployment configuration exists
-- [ ] Verified live API and frontend links have been added
+- [x] Verified live API and frontend links have been added
