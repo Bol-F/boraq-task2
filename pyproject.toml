@@ -9,22 +9,29 @@ dependencies = [
     "drf-spectacular>=0.30.0",
     "gunicorn>=26.0.0",
     "joblib>=1.5.3",
-    "mlflow>=3.15.1",
     "pandas>=2.3.3",
     "psycopg[binary]>=3.3.4",
     "requests>=2.34.2",
     "scikit-learn>=1.9.0",
-    "streamlit>=1.61.1",
     "whitenoise>=6.12.0",
 ]
 
 [dependency-groups]
+dashboard = [
+    "streamlit>=1.61.1",
+]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-django>=4.12.0",
     "ruff>=0.16.1",
 ]
+training = [
+    "mlflow>=3.15.1",
+]
+
+[tool.uv]
+default-groups = ["dev", "training", "dashboard"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"

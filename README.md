@@ -112,8 +112,11 @@ Run this command after switching branches or whenever `pyproject.toml` or
 uv sync
 ```
 
-Use `uv add <package>` for a production dependency and
-`uv add --dev <package>` for a development dependency. Commit both
+Use `uv add <package>` for an API runtime dependency,
+`uv add --group training <package>` for a training-only dependency,
+`uv add --group dashboard <package>` for a local dashboard dependency, and
+`uv add --dev <package>` for a development dependency. The configured default
+groups make a normal `uv sync` install all three local toolsets. Commit both
 `pyproject.toml` and `uv.lock` when dependencies change.
 
 ## Dataset
@@ -550,13 +553,15 @@ including `POST`, return HTTP 405 Method Not Allowed.
 
 ## Run the Django API with Docker
 
-The multi-stage image uses Python 3.11 slim and pinned `uv`, installs locked
-production dependencies with `uv sync --frozen --no-dev`, copies only the
-Django API code and required model artifacts, collects compressed static
-files, and runs both Django and model-bundle checks during the build. The final
-stage serves through Gunicorn as an unprivileged user with a 120-second worker
-timeout. Its health check uses Python's standard library, so no extra curl
-package is needed.
+The multi-stage image uses Python 3.11 slim and pinned `uv`, installs only the
+locked API runtime dependencies with
+`uv sync --frozen --no-default-groups`, copies only the Django API code and
+required model artifacts, collects compressed static files, and runs both
+Django and model-bundle checks during the build. MLflow, Streamlit, and their
+local-only dependency trees are deliberately absent from the public inference
+image. The final stage serves through Gunicorn as an unprivileged user with a
+120-second worker timeout. Its health check uses Python's standard library, so
+no extra curl package is needed.
 
 The approved model and metadata are tracked and included in the Docker build
 context, so a clean checkout can build reproducibly. To intentionally recreate

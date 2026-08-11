@@ -15,7 +15,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python
+    uv sync --frozen --no-default-groups --no-install-project \
+        --python /usr/local/bin/python
 
 
 FROM python:3.11-slim AS runtime
@@ -42,6 +43,8 @@ RUN export DJANGO_SECRET_KEY=build-only-insecure-validation-key-do-not-use \
     DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1; \
     python manage.py collectstatic --noinput \
     && python manage.py check \
+    && python -c \
+        "import importlib.util; assert importlib.util.find_spec('mlflow') is None" \
     && python manage.py shell -c \
         "from predictions.services.model_loader import get_model_bundle; get_model_bundle()"
 
