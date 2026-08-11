@@ -4,12 +4,13 @@ This repository is an end-to-end, beginner-friendly Telecom Customer Churn
 MLOps project. It downloads and validates the IBM sample dataset, trains and
 compares reproducible scikit-learn pipelines, tracks experiments with MLflow,
 serves the approved model through Django REST Framework, and provides a
-Streamlit prediction dashboard. Automated tests, a real ROC-AUC quality gate,
-Docker, GitHub Actions CI, guarded weekly retraining, and deployment manifests
-complete the delivery workflow.
+production Next.js interface plus an optional local Streamlit dashboard.
+Automated tests, a real ROC-AUC quality gate, Docker, GitHub Actions CI,
+guarded weekly retraining, and deployment manifests complete the delivery
+workflow.
 
 The repository contains deployment configuration, but it does not claim a live
-API or dashboard. Add public links only after deploying and verifying both
+API or frontend. Add public links only after deploying and verifying both
 services.
 
 ## Technology stack
@@ -19,7 +20,8 @@ services.
 - drf-spectacular for OpenAPI schema generation and Swagger UI
 - pandas, scikit-learn, and joblib for preprocessing, training, and persistence
 - MLflow for local experiment tracking and model artifacts
-- Streamlit for the customer churn dashboard
+- Next.js 16, React 19, TypeScript, and Tailwind CSS for the Vercel frontend
+- Streamlit for the optional local customer churn dashboard
 - requests for HTTP clients
 - Psycopg for future PostgreSQL connectivity
 - Gunicorn for production serving on supported platforms
@@ -28,7 +30,7 @@ services.
 - Docker for the production-oriented API image and local Compose workflow
 - GitHub Actions for CI, model-quality checks, and weekly retraining
 - Render Blueprint configuration for the Docker-based Django API
-- Streamlit Community Cloud configuration for the dashboard
+- Vercel configuration for the Next.js frontend and server-side API proxy
 
 ## Architecture
 
@@ -38,13 +40,15 @@ flowchart TD
     T --> M[MLflow experiment tracking]
     T --> P[Model-promotion quality gates]
     P --> A[Approved model.pkl and metadata]
-    A --> DEPLOY[Docker and CI-gated Render deployment]
-    DEPLOY --> API[Django REST Framework API]
-    API --> UI[Streamlit dashboard]
 
-    CI[GitHub Actions CI on main and pull requests] --> D
-    CI --> T
-    CI --> DEPLOY
+    B[Browser] --> V[Next.js frontend on Vercel]
+    V --> X[Same-origin Next.js route handlers]
+    X --> API[Django REST Framework API on Render]
+    API --> A
+
+    S[Optional local Streamlit dashboard] --> API
+    CI[GitHub Actions backend and frontend gates] --> API
+    CI --> V
     R[Weekly retraining: Monday 03:00 UTC] --> T
     R --> P
 ```
@@ -61,10 +65,11 @@ then permits the model and metadata pair to replace the tracked artifacts.
 |-- .github/workflows/
 |   |-- ci.yml                    # tests, quality gate, coverage, image build
 |   `-- retrain.yml               # weekly candidate training and promotion
-|-- .streamlit/                   # safe dashboard hosting configuration
+|-- .streamlit/                   # safe local Streamlit configuration
 |-- config/                       # Django settings, URL routing, WSGI/ASGI
 |-- dashboard/                    # Streamlit app, components, and API client
 |-- data/                         # downloaded real dataset (ignored)
+|-- frontend/                     # Next.js UI and same-origin API proxy
 |-- ml_pipeline/                  # data, preprocessing, training, promotion
 |-- models/                       # approved model.pkl and metadata
 |-- predictions/                  # serializers, services, API views, URLs
@@ -107,8 +112,11 @@ Run this command after switching branches or whenever `pyproject.toml` or
 uv sync
 ```
 
-Use `uv add <package>` for a production dependency and
-`uv add --dev <package>` for a development dependency. Commit both
+Use `uv add <package>` for an API runtime dependency,
+`uv add --group training <package>` for a training-only dependency,
+`uv add --group dashboard <package>` for a local dashboard dependency, and
+`uv add --dev <package>` for a development dependency. The configured default
+groups make a normal `uv sync` install all three local toolsets. Commit both
 `pyproject.toml` and `uv.lock` when dependencies change.
 
 ## Dataset
@@ -343,9 +351,50 @@ With Django running, interactive Swagger documentation is available at
 `http://127.0.0.1:8000/api/docs/`. The generated OpenAPI schema is available at
 `http://127.0.0.1:8000/api/schema/`.
 
-## Streamlit dashboard
+## Next.js frontend
 
-The dashboard at `dashboard/app.py` provides a guided form for all 19 customer
+The deployable browser interface lives in `frontend/`. It contains all 19
+model fields, accessible validation and readiness states, responsive layouts,
+and low/medium/high prediction results. The browser calls only same-origin
+`/api/health` and `/api/predict` routes. Those Next.js Route Handlers read the
+server-only `RENDER_API_URL`, apply a 10-second upstream timeout, disable
+caching, sanitize failures, and forward requests to Django.
+
+Start Django first, then prepare the frontend in another terminal:
+
+```powershell
+Set-Location frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+On macOS or Linux, replace `Copy-Item` with
+`cp .env.example .env.local`. The example config points to the local Django
+server:
+
+```dotenv
+RENDER_API_URL=http://127.0.0.1:8000
+```
+
+Open `http://localhost:3000`. Do not rename this variable with a
+`NEXT_PUBLIC_` prefix: the backend origin belongs only in the Next.js server
+runtime and must not be embedded in browser JavaScript.
+
+Run the complete frontend gate with:
+
+```bash
+cd frontend
+npm run lint
+npm run test
+npm run typecheck
+npm run build
+```
+
+## Optional local Streamlit dashboard
+
+The dashboard at `dashboard/app.py` remains available for local exploration.
+It provides a guided form for all 19 customer
 features, displays prediction results, and reports API/model readiness. It is a
 presentation client: it sends HTTP requests to Django and never imports or
 loads `models/model.pkl` itself. Django remains responsible for validation,
@@ -504,13 +553,15 @@ including `POST`, return HTTP 405 Method Not Allowed.
 
 ## Run the Django API with Docker
 
-The multi-stage image uses Python 3.11 slim and pinned `uv`, installs locked
-production dependencies with `uv sync --frozen --no-dev`, copies only the
-Django API code and required model artifacts, runs a Django check during the
-build, and serves through Gunicorn as an unprivileged user. Its health check
-uses Python's standard library, so no extra curl package is needed. The
-Swagger UI uses its configured CDN assets and does not require collected local
-static files.
+The multi-stage image uses Python 3.11 slim and pinned `uv`, installs only the
+locked API runtime dependencies with
+`uv sync --frozen --no-default-groups`, copies only the Django API code and
+required model artifacts, collects compressed static files, and runs both
+Django and model-bundle checks during the build. MLflow, Streamlit, and their
+local-only dependency trees are deliberately absent from the public inference
+image. The final stage serves through Gunicorn as an unprivileged user with a
+120-second worker timeout. Its health check uses Python's standard library, so
+no extra curl package is needed.
 
 The approved model and metadata are tracked and included in the Docker build
 context, so a clean checkout can build reproducibly. To intentionally recreate
@@ -558,12 +609,15 @@ the same values in their environment or secrets UI; do not commit a real
 | `DJANGO_SECRET_KEY` | Django | Signing secret; unsafe local fallback, always set in production |
 | `DJANGO_DEBUG` | Django | Debug mode; `True` locally and `false` in the image/Render |
 | `DJANGO_ALLOWED_HOSTS` | Django | Comma-separated hosts; defaults to `localhost,127.0.0.1` |
+| `RENDER_EXTERNAL_HOSTNAME` | Django/Render | Exact Render hostname, supplied automatically by Render and appended to allowed hosts |
 | `MODEL_PATH` | Django | Pipeline path; defaults to `models/model.pkl` |
 | `MODEL_METADATA_PATH` | Django | Metadata path; defaults to `models/model_metadata.json` |
 | `PORT` | Gunicorn | Listening port; defaults to `8000`, provided by Render |
 | `WEB_CONCURRENCY` | Gunicorn | Worker count; defaults to `2` |
-| `API_URL` | Streamlit | Django base URL; defaults to `http://127.0.0.1:8000` |
+| `RENDER_API_URL` | Next.js/Vercel | Server-only Django base URL, with no endpoint suffix |
+| `API_URL` | Local Streamlit | Django base URL; defaults to `http://127.0.0.1:8000` |
 | `MLFLOW_TRACKING_URI` | Training | Optional tracking store; defaults to local `mlflow.db` |
+| `RENDER_DEPLOY_HOOK_URL` | GitHub Actions secret | Optional Render deploy hook used only after a promoted model commit |
 
 Once the container is ready, verify its three public surfaces:
 
@@ -592,21 +646,24 @@ Common Docker troubleshooting:
 ## GitHub Actions CI
 
 `.github/workflows/ci.yml` runs on pushes to `main`, pull requests targeting
-`main`, and manual `workflow_dispatch` runs. The single Ubuntu job uses Python
-3.11, SHA-pinned official actions, uv's dependency cache, and
-`uv sync --locked`. It has read-only repository permissions and safe CI-only
-environment values.
+`main`, and manual `workflow_dispatch` runs. It has read-only repository
+permissions and safe CI-only environment values. Its independent Ubuntu jobs
+cover the Python API and the Next.js frontend, allowing both stacks to fail
+quickly while still reporting their own results.
 
 The workflow fails as soon as any of these checks fails:
 
-1. Ruff lint and format verification.
-2. Checksum-verified dataset download with explicit `--overwrite` and a
+1. Python 3.11 and locked uv dependency synchronization with caching.
+2. Ruff lint and format verification.
+3. Checksum-verified dataset download with explicit `--overwrite` and a
    7,043-row/schema validation.
-3. Django system checks and migrations.
-4. The dedicated real-data model-quality gate.
-5. The full pytest suite with terminal and XML coverage reports.
-6. Validation that the tracked approved model bundle loads successfully.
-7. A production Docker image build from the approved tracked artifacts.
+4. Django system, deployment, and migration checks.
+5. The dedicated real-data model-quality gate.
+6. The full pytest suite with terminal and XML coverage reports.
+7. Validation that the tracked approved model bundle loads successfully.
+8. A production Docker image build from the approved tracked artifacts.
+9. Node 24 dependency installation with `npm ci`, followed by frontend lint,
+   unit tests, TypeScript checking, and a production Next.js build.
 
 The quality test is intentionally explicit even though it is also part of the
 full pytest run: the separate step makes a model regression easy to identify in
@@ -645,8 +702,8 @@ remain ignored.
 
 The final job summary reads the generated `models/model_metadata.json` data and
 reports model name, version, ROC-AUC, PR-AUC, F1, dataset row count, training
-timestamp, job results, and whether repository artifacts changed. Metrics are
-never hardcoded in the workflow.
+timestamp, job results, whether repository artifacts changed, and whether a
+Render redeploy was requested. Metrics are never hardcoded in the workflow.
 
 After the workflow is merged into `main`, start a manual retraining run with
 care:
@@ -662,6 +719,12 @@ its repository push uses `GITHUB_TOKEN`; [GitHub suppresses new workflow runs
 from that token by default](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
 Together these choices prevent an automation loop, while the retraining
 workflow itself runs Django checks and all tests before the commit.
+
+If the repository secret `RENDER_DEPLOY_HOOK_URL` is configured, the workflow
+calls that masked hook only after the approved pair was actually committed.
+There is no deployment call for a failed, rejected, or byte-identical
+candidate. This closes the gap created by GitHub suppressing CI runs from the
+workflow's own `GITHUB_TOKEN` commit, while avoiding duplicate deployments.
 
 Repository rules must allow the workflow's bot to update `main`. If protected
 branch policy requires every change to use a pull request, leave direct bot
@@ -696,7 +759,8 @@ web service built from this repository's
 `Dockerfile`. It uses the free plan by default, waits for linked CI checks to
 pass before auto-deploying, starts Gunicorn through the image `CMD`, and checks
 `/api/health/`. Render supplies `PORT`; the Blueprint deliberately does not
-hardcode it.
+hardcode it. Django reads Render's exact `RENDER_EXTERNAL_HOSTNAME`
+automatically, so the service never needs a wildcard allowed host.
 
 Manual deployment steps:
 
@@ -705,65 +769,88 @@ Manual deployment steps:
 3. Select the root `render.yaml` and review the proposed web service.
 4. Confirm that Render generated `DJANGO_SECRET_KEY`; never replace it with a
    literal committed value.
-5. Keep `DJANGO_DEBUG=false`, the `/app/models/...` paths, and the generated
-   `.onrender.com` host. Add any verified custom domain to
+5. Keep `DJANGO_DEBUG=false`, the `/app/models/...` paths, and the safe
+   loopback values already in `DJANGO_ALLOWED_HOSTS`. Render supplies its exact
+   public hostname separately. Add any verified custom domain to
    `DJANGO_ALLOWED_HOSTS` later.
 6. Deploy, wait for the linked CI checks and container health check, then copy
    the actual service base URL.
 7. Verify health, documentation, and a complete prediction before publishing
    the URL.
+8. Optionally create a Render deploy hook and save it as the masked GitHub
+   Actions secret `RENDER_DEPLOY_HOOK_URL` so promoted weekly models are
+   redeployed.
 
 For example, after setting a real verified URL in a shell:
 
 ```bash
-export API_URL=https://your-actual-render-service.example
-curl "$API_URL/api/health/"
-curl "$API_URL/api/docs/"
+export RENDER_URL=https://your-actual-render-service.example
+curl "$RENDER_URL/api/health/"
+curl "$RENDER_URL/api/docs/"
 ```
 
 Use the prediction payload from the Prediction endpoint section with
-`$API_URL/api/predict/` for the final POST check. No database or persistent disk
-is required for inference. The API returns HTTP 503 to Render's health check if
-the bundled model is absent or invalid, preventing an unready deployment from
-being treated as healthy.
+`$RENDER_URL/api/predict/` for the final POST check. No database or persistent
+disk is required for inference. The API returns HTTP 503 to Render's health
+check if the bundled model is absent or invalid, preventing an unready
+deployment from being treated as healthy.
 
-## Deploy the Streamlit dashboard
+Render's Events and Logs pages show build, start, and health-check failures.
+Use **Manual Deploy > Deploy latest commit** to retry a fixed revision. If a
+new release is unhealthy, restore the previous healthy deployment from
+Render's rollback controls and investigate before promoting it again.
 
-[Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud)
-can use the root `uv.lock` directly, so this project does not add a separately
-maintained `requirements.txt`. `pyproject.toml` and `uv.lock` remain the
-dependency sources of truth and already include Streamlit, requests, and
-django-environ.
+## Deploy the Next.js frontend to Vercel
 
-Manual dashboard deployment steps:
+`frontend/` is an independent Next.js application. `frontend/vercel.json`
+selects Next.js and makes `npm run verify`—lint, tests, type checking, and the
+production build—the deployment build command. `package.json` and
+`package-lock.json` are the frontend dependency sources of truth; the Python
+lock files remain authoritative for Django and Streamlit.
 
-1. Create a Community Cloud app from the same GitHub repository.
-2. Select the intended branch, Python 3.11, and `dashboard/app.py` as the main
-   file.
-3. In **Advanced settings > Secrets**, set the verified Django base URL as a
-   root-level TOML value:
+Manual deployment steps:
 
-   ```toml
-   API_URL = "https://your-actual-render-service.example"
-   ```
+1. Import the same GitHub repository into Vercel.
+2. Set the project root directory to `frontend` and keep the detected Next.js
+   framework preset.
+3. Set `RENDER_API_URL` to the verified HTTPS Render base URL in Production and
+   Preview environments. Do not append `/api/health/` or `/api/predict/`.
+4. Keep the production branch as `main` and enable GitHub deployment checks so
+   a failed CI run cannot promote a production deployment.
+5. Deploy a preview, verify readiness, form validation, and at least one real
+   prediction through the proxy, then promote the tested revision.
+6. Verify the production URL again before adding it to this README.
 
-4. Do not include `/api/health/` or `/api/predict/` in `API_URL`; the dashboard
-   adds those paths safely.
-5. Deploy and verify the readiness indicator and at least one prediction.
+`RENDER_API_URL` intentionally has no `NEXT_PUBLIC_` prefix. Only the Next.js
+Route Handlers can read it; browser JavaScript receives same-origin paths and
+never receives the Render origin. Vercel environment-variable changes apply to
+new deployments, so redeploy after changing the backend URL. Review build and
+runtime logs from the Vercel deployment page; redeploy the last known-good Git
+revision to roll back a broken frontend release.
 
-`.streamlit/config.toml` enables headless hosting, and
-`.streamlit/secrets.toml.example` documents the expected setting. A real local
-`.streamlit/secrets.toml` is ignored. Root-level Streamlit secrets are exposed
-as environment variables, which matches the dashboard's `os.getenv("API_URL")`
-configuration. No deployed API domain is hardcoded in source.
+After both services have real URLs, verify the complete production path:
+
+```bash
+export RENDER_URL=https://your-actual-render-service.example
+export FRONTEND_URL=https://your-actual-vercel-project.example
+
+curl "$RENDER_URL/api/health/"
+curl "$RENDER_URL/api/docs/"
+curl "$FRONTEND_URL/api/health"
+```
+
+Then submit the representative payload from the Prediction endpoint section
+to both `$RENDER_URL/api/predict/` and `$FRONTEND_URL/api/predict`, and verify
+that the browser form shows the same risk result. The values above are explicit
+placeholders, not claimed production URLs.
 
 ## Cross-origin decision
 
-The Streamlit server sends requests to Django from server-side Python through
-`requests`; the user's browser does not call the Django origin directly.
-Browser CORS headers are therefore unnecessary for this architecture, and
-`django-cors-headers` was intentionally not added. Revisit this decision only
-if a future browser-side frontend calls the API directly.
+The browser calls same-origin Vercel routes. Those route handlers call Django
+from the Next.js server, just as local Streamlit calls Django from server-side
+Python. The browser never sends a cross-origin request to Render, so browser
+CORS headers are unnecessary and `django-cors-headers` was intentionally not
+added. Revisit this only if a future browser bundle calls Django directly.
 
 ## CI and deployment troubleshooting
 
@@ -779,15 +866,22 @@ if a future browser-side frontend calls the API directly.
   prohibited.
 - **Retraining creates no commit:** this is expected when the approved files
   have no staged difference. The workflow still uploads artifacts and metrics.
+- **A promoted model is not on Render:** configure the repository secret
+  `RENDER_DEPLOY_HOOK_URL`, then inspect the retraining summary to confirm the
+  hook was called only after a model commit.
 - **Render reports DisallowedHost:** add the exact verified custom hostname to
-  `DJANGO_ALLOWED_HOSTS`; keep `.onrender.com` for the generated service host.
+  `DJANGO_ALLOWED_HOSTS`. Render's generated hostname is consumed through
+  `RENDER_EXTERNAL_HOSTNAME`; do not add a wildcard.
 - **Render health is HTTP 503:** inspect model inclusion and `MODEL_PATH` /
   `MODEL_METADATA_PATH`. Do not expose internal loader errors to clients.
 - **The first hosted request times out:** a free service can cold-start. Retry
   the health request after the service becomes ready or use an appropriate
   paid always-on instance for stricter latency needs.
-- **Streamlit cannot connect:** ensure `API_URL` is the reachable HTTPS base URL
-  with no endpoint suffix. This server-side request does not need a CORS change.
+- **Vercel shows “backend unavailable”:** confirm `RENDER_API_URL` is set for
+  that exact Vercel environment, uses HTTPS, and has no endpoint suffix; then
+  redeploy so the new value reaches the server runtime.
+- **Local Streamlit cannot connect:** ensure `API_URL` is a reachable Django
+  base URL with no endpoint suffix.
 - **Swagger UI is blank:** confirm the host can reach the configured CDN assets
   and that `/api/schema/` returns an OpenAPI document.
 
@@ -807,7 +901,7 @@ if a future browser-side frontend calls the API directly.
   automation are not implemented.
 - SQLite is sufficient because inference stores no application data; a future
   stateful service would need a managed database and migration strategy.
-- No live deployment URLs are included until the API and dashboard are
+- No live deployment URLs are included until the API and Next.js frontend are
   actually deployed and verified.
 
 ## Submission checklist
@@ -820,11 +914,12 @@ if a future browser-side frontend calls the API directly.
 - [x] `models/model_metadata.json` exists
 - [x] Prediction API works locally
 - [x] API documentation works locally
+- [x] Next.js frontend, same-origin proxy, and component tests pass locally
 - [x] Streamlit dashboard client and components pass locally
 - [x] Complete tests pass locally
 - [x] Model-quality gate passes locally
 - [ ] CI workflow is green on GitHub after this branch is merged and run
 - [x] Weekly retraining workflow exists
 - [x] Docker image build and API container endpoints are verified locally
-- [x] Deployment configuration exists
-- [ ] Verified live API and dashboard links have been added
+- [x] Render and Vercel deployment configuration exists
+- [ ] Verified live API and frontend links have been added

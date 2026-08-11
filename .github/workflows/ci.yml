@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DJANGO_SECRET_KEY: ci-only-not-a-production-secret
+  DJANGO_SECRET_KEY: ci-only-deployment-check-secret-with-more-than-fifty-characters-123
   DJANGO_DEBUG: "false"
   DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
   MODEL_PATH: models/model.pkl
@@ -79,6 +79,11 @@ jobs:
       - name: Run Django system checks
         run: uv run python manage.py check
 
+      - name: Run Django deployment checks
+        env:
+          RENDER_EXTERNAL_HOSTNAME: churn-api-ci.example.invalid
+        run: uv run python manage.py check --deploy --fail-level WARNING
+
       - name: Apply database migrations
         run: uv run python manage.py migrate --noinput
 
@@ -97,3 +102,44 @@ jobs:
 
       - name: Build Django API image
         run: docker build -t churn-api .
+
+  frontend:
+    name: Lint, test, and build Next.js frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      RENDER_API_URL: http://127.0.0.1:8000
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend lint checks
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test
+
+      - name: Run frontend type checks
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
