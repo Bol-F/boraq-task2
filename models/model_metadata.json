@@ -4,12 +4,12 @@
   "roc_auc": 0.8416518122400475,
   "pr_auc": 0.6327060026486367,
   "f1": 0.6136125654450262,
-  "training_date": "2026-08-24T03:51:22.653962+00:00",
+  "training_date": "2026-08-31T09:16:16.916115+00:00",
   "dataset_rows": 7043,
   "feature_count": 19,
   "random_state": 42,
   "selection_metric": "roc_auc",
   "mlflow_experiment": "telecom-churn",
   "mlflow_experiment_id": "1",
-  "mlflow_run_id": "7aebae17711e47fea9f7bc49633254f9"
+  "mlflow_run_id": "9b63bde119d7480f8652f0570bd538f2"
 }
